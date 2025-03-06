@@ -7,7 +7,7 @@ options(timeout = 36000)
 #
 
 # Set directory structure
-relPath <- "D:/Research/Chapter3/"
+relPath <- "D:/Research/DroughtForecasts/"
 outPath <- "Data/CHELSA/Raw/Current/"
 
 # Get file names

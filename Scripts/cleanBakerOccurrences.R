@@ -1,5 +1,5 @@
 library(stringr)
-#
+# Set as needed
 setwd("~/Downloads")
 ##
 MABDB_2023_working <- read.csv("MABDB_2023_working.csv")
@@ -67,5 +67,5 @@ final_df <- cbind(MABDB_2023_working, resultados_df)
 # Mostrar las primeras filas del DataFrame final
 head(final_df)
 
-
+# Set as needed
 write.csv(final_df, "exp1.csv")

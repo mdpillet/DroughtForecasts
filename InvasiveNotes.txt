@@ -1,0 +1,10 @@
+1) All country/species combinations for which NSR call did not result in N or Ne were manually reviewed. Note that this only applies for species with 10 or more occurrence records.
+2) This manual review was based on:
+* Review of photos (in the case of iNaturalist data)
+* Distribution descriptions (predominantly from the IUCN Red List (version 2024-1), the NCL (Hunt 2006) and The Cactus Family (Anderson 2001))
+* Biogeography (e.g. records in a single mountain rangein a neighboring country where the species has not been explicitly recorded)
+* Geographic outliers (e.g. cultivated records, singletons far from the bulk of observations)
+3) When significant uncertainty about the range of species was encountered, all country/species combinations underwent review (e.g. Epiphyllum phyllanthus).
+4) Some species were marked for exclusion from further analyses:
+* Species for which the native range is very uncertain were removed (Lophocereus marginatus, Opuntia aciculata, O. cochenillifera, O. dejecta, O. ficus-indica, O. stricta, Selenicereus undatus).
+* Rhipsalis baccifera was removed entirely as occurrence records from its native range in Africa were excluded.

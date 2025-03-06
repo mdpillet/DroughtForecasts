@@ -2,6 +2,10 @@ library(terra)
 library(ENMeval)
 library(rmarkdown)
 library(plyr)
+library(spThin)
+library(CVmaxnet)
+library(sf)
+library(pROC)
 
 # Set directory structure and load workflow functions
 predPath <- "D:/Research/DroughtForecasts/Data/Predictors/"
@@ -20,13 +24,16 @@ numCores <- 7
 
 # Set modeling parameters
 crs <- "+proj=longlat" # Projection for occurrence data
+thinRadius <- 10 # Kilometers for spatial thinning
 bgNo <- 10000 # Number of background points to be sampled
 minNo <- 10 # Minimum number of occurrences for modeling
 bufferSize <- 100000 # Buffer size
-# tune.args <- list(fc = c("LQ", "H", "LQH"), rm = seq(1, 5, 0.5)) # Set feature complexity and regularization
-tune.args <- list(fc = c("LQ"), rm = seq(1, 5, 0.5)) # Set feature complexity and regularization
+tune.args <- list(fc = c("LQP"), rm = 1) # Set feature complexity and regularization
 nullModels <- F # Create null models for model selection
 centile <- 0.1 # Quantile for thresholding based on omission rate
+corrThreshold <- 0.7 # Threshold for removing correlated predictor variables
+aucThreshold <- 0.5 # Threshold for discarding models based on cross-validated AUC
+aucDistanceThreshold <- 0.7 # Threshold for discarding model based on full-model AUC with a background point distance filter of 50 km
 
 # Set cleaning options
 rmCroppedPreds <- T
@@ -39,7 +46,7 @@ source(scriptPath)
 spList <- list.files(spPath, "shp$", full.names = T)
 
 # Loop workflow for all species
-# NOTE: when the workflow throws an error, this is most likely due to model selection not succeeding when certain evaluation statistics (e.g. AICc) cannot be calculated.
+# NOTE: when the workflow throws an error, this is most likely due to model selection not succeeding.
 # NOTE: when this occurs, the workflow should be restarted after the species in question.
 for (currentSpecies in 1:length(spList)) {
   # Get species name
@@ -55,21 +62,19 @@ for (currentSpecies in 1:length(spList)) {
     dir.create(paste0(outPath, sp))
     dir.create(paste0(outPath, sp, "/Background/"))
     dir.create(paste0(outPath, sp, "/Buffer/"))
+    dir.create(paste0(outPath, sp, "/BufferNull/"))
     dir.create(paste0(outPath, sp, "/CroppedPredictors/"))
     dir.create(paste0(outPath, sp, "/CroppedPredictors/Current/"))
+    dir.create(paste0(outPath, sp, "/UncorrelatedPredictors/"))
+    dir.create(paste0(outPath, sp, "/UncorrelatedPredictors/Current/"))
     dir.create(paste0(outPath, sp, "/ENM/"))
-    dir.create(paste0(outPath, sp, "/ModelsPCA/"))
     dir.create(paste0(outPath, sp, "/Presences/"))
-    dir.create(paste0(outPath, sp, "/TransformedPredictors/"))
-    dir.create(paste0(outPath, sp, "/TransformedPredictors/Current/"))
     dir.create(paste0(outPath, sp, "/StatusReport/"))
-    dir.create(paste0(outPath, sp, "/BestModels/"))
     if (nullModels) dir.create(paste0(outPath, sp, "/NullModels/"))
     dir.create(paste0(outPath, sp, "/ModelSetComparison/"))
     dir.create(paste0(outPath, sp, "/SuitabilityMaps/"))
     dir.create(paste0(outPath, sp, "/SuitabilityMaps/Current/"))
     dir.create(paste0(outPath, sp, "/CroppedPredictors/Future/"))
-    dir.create(paste0(outPath, sp, "/TransformedPredictors/Future/"))
     dir.create(paste0(outPath, sp, "/SuitabilityMaps/Future/"))
     dir.create(paste0(outPath, sp, "/MarginalEffects/"))
     dir.create(paste0(outPath, sp, "/Thresholds/"))
@@ -80,8 +85,13 @@ for (currentSpecies in 1:length(spList)) {
     dir.create(paste0(outPath, sp, "/ConcordanceMaps/"))
   }
   
-  # Match occurrence data projection to environmental data
+  # Spatially thin occurrences and match occurrence data projection to environmental data
   spOcc <- vect(spList[currentSpecies])
+  thinDF <- crds(spOcc, df = T)
+  thinDF$sp <- sp
+  thinnedOcc <- thin(thinDF, lat.col = "y", long.col = "x", spec.col = "sp", thin.par = thinRadius, reps = 1, 
+                     locs.thinned.list.return = T, write.files = F, write.log.file = F, verbose = F)[[1]]
+  spOcc <- spOcc[as.integer(row.names(thinnedOcc))]
   predFiles <- list.files(predPath, "current.tif$", full.names = T)
   preds <- rast(predFiles[1])
   spOcc <- project(spOcc, crs(preds))
@@ -132,6 +142,7 @@ for (currentSpecies in 1:length(spList)) {
   print(paste0("Construct buffered convex hull for species: ", sp))
   statusReport[3, 1] <- "Buffer constructed"
   statusReport[3, 2] <- buildBuffer(vect(spList[currentSpecies], crs = crs), bufferSize, predFiles[1], paste0(outPath, sp, "/Buffer/buffer.shp"), plot = F)
+  statusReport[3, 2] <- buildBuffer(vect(spList[currentSpecies], crs = crs), 0, predFiles[1], paste0(outPath, sp, "/BufferNull/buffer.shp"), plot = F)
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   # Crop predictor files using buffer
@@ -158,7 +169,7 @@ for (currentSpecies in 1:length(spList)) {
   set.seed(seedNo)
   print(paste0("Sampling background points for species: ", sp))
   croppedPreds <- list.files(paste0(outPath, sp, "/CroppedPredictors/Current/"), "ase.*tif$", full.names = T)[1]
-  bgPoints <- sampleBackground(croppedPreds, occProj, bgNo)
+  bgPoints <- sampleBackground(croppedPreds, bgNo)
   write.csv(bgPoints, paste0(outPath, sp, "/Background/background.csv"), row.names = F)
   bgSp <- bgPoints
   names(bgSp) <- c("lon", "lat")
@@ -167,92 +178,58 @@ for (currentSpecies in 1:length(spList)) {
   statusReport[5, 2] <- nrow(bgPoints)
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
-  # Fit PCA models
-  print(paste0("Fitting PCA models for species: ", sp))
+  # Remove correlated predictors
+  print(paste0("Removing variables with correlations above threshold: ", corrThreshold))
   croppedPredFiles <- list.files(paste0(outPath, sp, "/CroppedPredictors/Current/"), "tif$", full.names = T)
-  modelStatus <- integer(length(croppedPredFiles))
+  croppedPredFilesShort <- list.files(paste0(outPath, sp, "/CroppedPredictors/Current/"), "tif$", full.names = F)
   for (i in 1:length(croppedPredFiles)) {
     preds <- croppedPredFiles[i]
-    modelStatus[i] <- fitPCA(preds, vect(bgSp, crs = crs(spOcc)), paste0(outPath, sp, "/ModelsPCA/"), seedNo = seedNo)
+    tossed <- removeCorrelatedPredictors(rast(preds), corrThreshold, paste0(outPath, sp, "/UncorrelatedPredictors/Current/", croppedPredFilesShort[i]), seedNo = seedNo)
+    write.csv(tossed, paste0(outPath, sp, "/UncorrelatedPredictors/Current/", croppedPredFilesShort[i], ".csv"), row.names = F)
   }
-  statusReport[6, 1] <- "Minimum no. of PCs"
-  statusReport[7, 1] <- "Maximum no. of PCs"
-  statusReport[6, 2] <- min(modelStatus)
-  statusReport[7, 2] <- max(modelStatus)
-  write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
-  
-  # Transform cropped predictors using PCA models
-  print(paste0("Transforming cropped predictors using PCA models for species: ", sp))
-  sampleStatus <- logical(length(croppedPredFiles))
-  for (i in 1:length(croppedPredFiles)) {
-    preds <- croppedPredFiles[i]
-    sampleStatus[i] <- transformPCA(preds, paste0(outPath, sp, "/ModelsPCA/"), paste0(outPath, sp, "/TransformedPredictors/Current/"))
-  }
-  statusReport[8, 1] <- "Transformed predictor files"
-  if (all(sampleStatus)) {
-    print(paste0("Predictor files transformed for species: ", sp))
-    statusReport[8, 2] <- "Passed"
-  } else {
-    print(paste0("Predictor files NOT transformed for species: ", sp))
-    statusReport[8, 2] <- "Failed"
-  }
-  write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
+  statusReport[6, 1] <- "Removed correlated predictors"
+  statusReport[6, 2] <- "Passed"
   
   # Fit models
   print(paste0("Fitting models for species: ", sp))
-  transPredFiles <- list.files(paste0(outPath, sp, "/TransformedPredictors/Current/"), "tif$", full.names = T)
-  for (i in 1:length(transPredFiles)) {
-    preds <- transPredFiles[i]
-    fitModel(finalPres, preds, bgPoints, sp, outDir = paste0(outPath, sp, "/ENM/"), tune.args, numCores, plot = T)
+  uncorrPredFiles <- list.files(paste0(outPath, sp, "/UncorrelatedPredictors/Current/"), "tif$", full.names = T)
+  folds <- spatialStratify(finalPres, seedNo)$folds
+  modelAlgs <- NULL
+  for (i in 1:length(uncorrPredFiles)) {
+    preds <- uncorrPredFiles[i]
+    alg <- fitModel(finalPres, preds, bgPoints, sp, outDir = paste0(outPath, sp, "/ENM/"), tune.args, numCores, plot = F, folds)
+    modelAlgs <- c(modelAlgs, alg)
   }
-  statusReport[9, 1] <- "Built ENMs"
+  statusReport[7, 1] <- "Built ENMs"
   print(paste0("ENMs built for species: ", sp))
-  statusReport[9, 2] <- "Passed"
-  write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
-  
-  # Select best model
-  print(paste0("Selecting best models for species: ", sp))
-  modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), "rda$", full.names = T)
-  for (i in 1:length(modelFiles)) {
-    print(paste0("Model selection for set ", i))
-    finalModel <- selectModel(modelFiles[i], 
-                              outDirModel = paste0(outPath, sp, "/BestModels/"),
-                              numCores = numCores,
-                              nullModels = nullModels,
-                              outDirNulls = paste0(outPath, sp, "/NullModels/"))
-  }
-  statusReport[10, 1] <- "Selected best ENMs"
-  print(paste0("Best ENMs selected for species: ", sp))
-  statusReport[10, 2] <- "Passed"
-  statusReport[11, 1] <- "Null models for model selection"
-  statusReport[11, 2] <- nullModels
+  statusReport[7, 2] <- paste0(modelAlgs, collapse = ",")
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   # Compare model sets
   print(paste0("Comparing model sets for species: ", sp))
-  modelFiles <- list.files(paste0(outPath, sp, "/BestModels/"), "rda$", full.names = T)
+  modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), "rda$", full.names = T)
   nullModelFiles <- list.files(paste0(outPath, sp, "/NullModels/"), "rda$", full.names = T)
   compareModelSets(modelFiles,
                    nullModels = nullModelFiles,
                    outDir = paste0(outPath, sp, "/ModelSetComparison/"))
-  statusReport[12, 1] <- "Model set comparison"
-  statusReport[12, 2] <- "Passed"
+  statusReport[8, 1] <- "Model set comparison"
+  statusReport[8, 2] <- "Passed"
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   # Create suitability maps for current environments
   print(paste0("Creating current suitability maps for species: ", sp))
-  modelFiles <- list.files(paste0(outPath, sp, "/BestModels/"), "rda$", full.names = T)
-  predFilesTrans <- list.files(paste0(outPath, sp, "/TransformedPredictors/Current/"), "tif$", full.names = T)
+  modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), "rda$", full.names = T)
+  predFiles <- list.files(paste0(outPath, sp, "/CroppedPredictors/Current/"), "tif$", full.names = T)
   for (i in 1:length(modelFiles)) {
     tmp <- strsplit(modelFiles[i], "/", fixed = T)
     tmp <- tmp[[1]][length(tmp[[1]])]
     tmp <- strsplit(tmp, ".", fixed = T)
     tmp <- tmp[[1]][1]
-    preds <- grep(tmp, predFilesTrans, value = T)
+    preds <- grep(tmp, predFiles, value = T)
     predictSuitability(modelFiles[i], preds, outDir = paste0(outPath, sp, "/SuitabilityMaps/Current/"))
   }
-  statusReport[13, 1] <- "Create suitability maps for current environments"
-  statusReport[13, 2] <- "Passed"
+  statusReport[9, 1] <- "Create suitability maps for current environments"
+  statusReport[9, 2] <- "Passed"
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   # Create suitability maps for future environments
@@ -264,46 +241,19 @@ for (currentSpecies in 1:length(spList)) {
     preds <- predFiles[i]
     sampleStatus[i] <- cropPredictors(preds, buffer, paste0(outPath, sp, "/CroppedPredictors/Future/"))
   }
-  statusReport[14, 1] <- "Cropped future predictor files"
+  statusReport[10, 1] <- "Cropped future predictor files"
   if (all(sampleStatus)) {
     print(paste0("Future predictor files cropped for species: ", sp))
-    statusReport[14, 2] <- "Passed"
+    statusReport[10, 2] <- "Passed"
   } else {
     print(paste0("Future predictor files NOT cropped for species: ", sp))
-    statusReport[14, 2] <- "Failed"
-  }
-  write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
-  
-  print(paste0("Transforming cropped future predictors using PCA models for species: ", sp))
-  croppedPredFiles <- list.files(paste0(outPath, sp, "/CroppedPredictors/Future/"), "tif$", full.names = T)
-  sampleStatus <- logical(length(croppedPredFiles))
-  for (i in 1:length(croppedPredFiles)) {
-    preds <- croppedPredFiles[i]
-    tmp <- strsplit(croppedPredFiles[i], "/", fixed = T)
-    tmp <- tmp[[1]][length(tmp[[1]])]
-    tmp <- strsplit(tmp, ".", fixed = T)
-    tmp <- tmp[[1]][1]
-    tmpVar <- strsplit(tmp, "_", fixed = T)[[1]][1]
-    tmpGCM <- strsplit(tmp, "_", fixed = T)[[1]][2]
-    if (tmpVar %in% c("a", "as", "ac", "asc")) {
-      sampleStatus[i] <- transferPCA(preds, paste0(outPath, sp, "/ModelsPCA/", tmpVar, "_current_current.rda"), paste0(outPath, sp, "/TransformedPredictors/Future/"))  
-    } else {
-      sampleStatus[i] <- transferPCA(preds, paste0(outPath, sp, "/ModelsPCA/", tmpVar, "_", tmpGCM, "_current.rda"), paste0(outPath, sp, "/TransformedPredictors/Future/"))
-    }
-  }
-  statusReport[15, 1] <- "Transformed future predictor files"
-  if (all(sampleStatus)) {
-    print(paste0("Future predictor files transformed for species: ", sp))
-    statusReport[15, 2] <- "Passed"
-  } else {
-    print(paste0("Future predictor files NOT transformed for species: ", sp))
-    statusReport[15, 2] <- "Failed"
+    statusReport[10, 2] <- "Failed"
   }
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   print(paste0("Creating future suitability maps for species: ", sp))
-  modelFiles <- list.files(paste0(outPath, sp, "/BestModels/"), "rda$", full.names = T)
-  predFiles <- list.files(paste0(outPath, sp, "/TransformedPredictors/Future/"), "tif$", full.names = F)
+  modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), "rda$", full.names = T)
+  predFiles <- list.files(paste0(outPath, sp, "/CroppedPredictors/Future/"), "tif$", full.names = F)
   for (i in 1:length(modelFiles)) {
     tmp <- strsplit(modelFiles[i], "/", fixed = T)
     tmp <- tmp[[1]][length(tmp[[1]])]
@@ -311,112 +261,39 @@ for (currentSpecies in 1:length(spList)) {
     tmp <- tmp[[1]][1]
     tmpVar <- strsplit(tmp, "_", fixed = T)[[1]][1]
     tmpGCM <- strsplit(tmp, "_", fixed = T)[[1]][2]
+    tmpPreds <- grep(paste0(tmpVar, "_"), predFiles, fixed = T, value = T)
     if (tmpVar %in% c("a", "as", "ac", "asc")) {
       tmpPreds <- grep(paste0(tmpVar, "_"), predFiles, fixed = T, value = T)
     } else {
       tmpPreds <- grep(paste0(tmpVar, "_", tmpGCM), predFiles, fixed = T, value = T)
     }
     for (j in 1:length(tmpPreds)) {
-      predictSuitability(modelFiles[i], paste0(outPath, sp, "/TransformedPredictors/Future/", tmpPreds[j]), outDir = paste0(outPath, sp, "/SuitabilityMaps/Future/"))
+      predictSuitability(modelFiles[i], paste0(outPath, sp, "/CroppedPredictors/Future/", tmpPreds[j]), outDir = paste0(outPath, sp, "/SuitabilityMaps/Future/"))
     }
   }
-  statusReport[16, 1] <- "Create suitability maps for future environments"
-  statusReport[16, 2] <- "Passed"
+  statusReport[11, 1] <- "Create suitability maps for future environments"
+  statusReport[11, 2] <- "Passed"
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
-  
-  # Create concordance maps
-  print(paste0("Create concordance maps for: ", sp))
-  suitMapsCur <- list.files(paste0(outPath, sp, "/SuitabilityMaps/Current/"), "tif$", full.names = T)
-  suitMapsFut <- list.files(paste0(outPath, sp, "/SuitabilityMaps/Future/"), "tif$", full.names = T)
-  ## Calculate model weights
-  suitMapsCur_noE <- grep("/a_|/ac_|/as_|/asc_", suitMapsCur, value = T)
-  suitMapsFut_noE <- grep("/a_|/ac_|/as_|/asc_", suitMapsFut, value = T)
-  modelWeightsCur_noE <- calculateWeights(suitMapsCur_noE, paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"))
-  modelWeightsCur_all <- calculateWeights(suitMapsCur, paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"))
-  modelWeightsFut_noE <- calculateWeights(suitMapsFut_noE, paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"))
-  modelWeightsFut_all <- calculateWeights(suitMapsFut, paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"))
-  ## Current - no extreme droughts
-  tmp1 <- app(rast(suitMapsCur_noE), weighted.mean, w = modelWeightsCur_noE$weight, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/noE_current.tif"), overwrite = T)
-  sd1 <- app(rast(suitMapsCur_noE), sd, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/noE_current_sd.tif"), overwrite = T)
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/noE_current.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(tmp1, range = c(0, 1))
-  dev.off()
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/noE_current_sd.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(sd1, range = c(0, 0.5))
-  dev.off()
-  ## Current - all
-  tmp2 <- app(rast(suitMapsCur), weighted.mean, w = modelWeightsCur_all$weight, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/all_current.tif"), overwrite = T)
-  sd2 <- app(rast(suitMapsCur), sd, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/all_current_sd.tif"), overwrite = T)
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/all_current.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(tmp2, range = c(0, 1))
-  dev.off()
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/all_current_sd.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(sd2, range = c(0, 0.5))
-  dev.off()
-  ## Future - no extreme droughts
-  tmp3 <- app(rast(suitMapsFut_noE), weighted.mean, w = modelWeightsFut_noE$weight, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/noE_future.tif"), overwrite = T)
-  sd3 <- app(rast(suitMapsFut_noE), sd, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/noE_future_sd.tif"), overwrite = T)
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/noE_future.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(tmp3, range = c(0, 1))
-  dev.off()
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/noE_future_sd.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(sd3, range = c(0, 0.5))
-  dev.off()
-  ## Future - all
-  tmp4 <- app(rast(suitMapsFut), weighted.mean, w = modelWeightsFut_all$weight, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/all_future.tif"), overwrite = T)
-  sd4 <- app(rast(suitMapsFut), sd, na.rm = T, filename = paste0(outPath, sp, "/ConcordanceMaps/all_future_sd.tif"), overwrite = T)
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/all_future.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(tmp4, range = c(0, 1))
-  dev.off()
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/all_future_sd.png"), width = 10, height = 10, units = "in", res = 320)
-  plot(sd4, range = c(0, 0.5))
-  dev.off()
-  ## Create comparison plot
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/all.png"), width = 10, height = 10, units = "in", res = 320)
-  par(mfrow = c(2, 2))
-  plot(tmp1, range = c(0, 1), main = "No drought variables - historical", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  plot(tmp2, range = c(0, 1), main = "All variables - historical", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  plot(tmp3, range = c(0, 1), main = "No drought variables - 2071-2100", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  plot(tmp4, range = c(0, 1), main = "All variables - 2071-2100", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  dev.off()
-  ## Create SD plot
-  png(filename = paste0(outPath, sp, "/ConcordanceMaps/all_sd.png"), width = 10, height = 10, units = "in", res = 320)
-  par(mfrow = c(2, 2))
-  upperLim <- round_any(max(minmax(sd1)[2], minmax(sd2)[2], minmax(sd3)[2], minmax(sd4)[2]), 0.25, ceiling)
-  plot(sd1, range = c(0, upperLim), main = "No drought variables - historical", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  plot(sd2, range = c(0, upperLim), main = "All variables - historical", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  plot(sd3, range = c(0, upperLim), main = "No drought variables - 2071-2100", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  plot(sd4, range = c(0, upperLim), main = "All variables - 2071-2100", axes = F)
-  points(spOcc, cex = 0.25, col = "red")
-  dev.off()
   
   # Create marginal effect plots
   print(paste0("Extracting summary statistics for predictor files for species: ", sp))
-  modelFiles <- list.files(paste0(outPath, sp, "/BestModels/"), "rda$", full.names = T)
+  modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), "rda$", full.names = T)
   croppedPredFilesCurrent <- list.files(paste0(outPath, sp, "/CroppedPredictors/Current/"), "tif$", full.names = T)
   for (i in 1:length(croppedPredFilesCurrent)) {
     extractPredSummary(croppedPredFilesCurrent[i], paste0(outPath, sp, "/CroppedPredictors/Future/"), spOcc, paste0(outPath, sp, "/MarginalEffects/"))  
   }
-  statusReport[17, 1] <- "Extracted summary statistics for predictor files"
-  statusReport[17, 2] <- "Passed"
+  statusReport[12, 1] <- "Extracted summary statistics for predictor files"
+  statusReport[12, 2] <- "Passed"
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   print(paste0("Create marginal effect plots for: ", sp))
   summFiles <- list.files(paste0(outPath, sp, "/MarginalEffects/"), "csv$", full.names = T)
-  pcaFiles <- list.files(paste0(outPath, sp, "/ModelsPCA/"), "rda$", full.names = T)
-  modelFiles <- list.files(paste0(outPath, sp, "/BestModels/"), "rda$", full.names = T)
+  modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), "rda$", full.names = T)
   for (i in 1:length(summFiles)) {
-    plotMarginal(summFiles[i], pcaFiles[i], modelFiles[i], paste0(outPath, sp, "/MarginalEffects/"))
+    plotMarginal(summFiles[i], modelFiles[i], paste0(outPath, sp, "/MarginalEffects/"))
   }
-  statusReport[18, 1] <- "Plotted marginal effects"
-  statusReport[18, 2] <- "Passed"
+  statusReport[13, 1] <- "Plotted marginal effects"
+  statusReport[13, 2] <- "Passed"
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   # Threshold maps
@@ -424,16 +301,16 @@ for (currentSpecies in 1:length(spList)) {
   suitMaps <- list.files(paste0(outPath, sp, "/SuitabilityMaps/Current/"), "tif$", full.names = T)
   pres <- vect(list.files(paste0(outPath, sp, "/Presences/"), "shp$", full.names = T))
   getThresholds(suitMaps, pres, centile, outDir = paste0(outPath, sp, "/Thresholds/"))
-  statusReport[19, 1] <- "Thresholds calculated"
-  statusReport[19, 2] <- "Passed"
+  statusReport[14, 1] <- "Thresholds calculated"
+  statusReport[14, 2] <- "Passed"
   write.csv(statusReport, paste0(outPath, sp, "/StatusReport/statusReport.csv"), row.names = F)
   
   print(paste0("Thresholding maps for: ", sp))
   suitMaps <- list.files(paste0(outPath, sp, "/SuitabilityMaps/"), "tif$", full.names = T, recursive = T)
   thresholds <- read.csv(paste0(outPath, sp, "/Thresholds/thresholds.csv"), header = T)
   threshold(suitMaps, thresholds, outDir = paste0(outPath, sp, "/RangeSizes/"))
-  statusReport[20, 1] <- "Maps thresholded"
-  statusReport[20, 2] <- "Passed"
+  statusReport[15, 1] <- "Maps thresholded"
+  statusReport[15, 2] <- "Passed"
   
   # Post-modeling cleaning
   if (rmCroppedPreds) unlink(paste0(outPath, sp, "/CroppedPredictors/"), recursive = T)
@@ -441,4 +318,213 @@ for (currentSpecies in 1:length(spList)) {
   
   # Remove temporary files
   tmpFiles(current = TRUE, orphan = TRUE, old = TRUE, remove = TRUE)
+}
+
+# Calculate distance-based AUC by subsampling background points, only retaining points a minimum distance away from all presences
+# NOTE: code may fail for large distances and will need to be restarted
+distances <- c(0, 25000, 50000, 75000)
+for (j in 1:length(distances)) {
+  for (currentSpecies in 1:length(spList)) {
+    # Get species name
+    sp <- strsplit(spList[currentSpecies], "/", fixed = T)[[1]]
+    sp <- sp[length(sp)]
+    sp <- strsplit(sp, ".", fixed = T)[[1]][1]
+    print(sp)
+    
+    # Read in presences and absences
+    if (file.exists(paste0(outPath, sp, "/Presences/finalPres.shp"))) {
+      presences <- vect(paste0(outPath, sp, "/Presences/finalPres.shp"))
+      background <- vect(paste0(outPath, sp, "/Background/background.shp"))  
+    } else { next }
+    
+    # Calculate distances
+    distance_matrix <- distance(background, presences)
+    min_distances <- apply(distance_matrix, 1, min)
+    background_filtered <- background[min_distances >= distances[j], ]
+    
+    if (file.exists(paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"))) {
+      models <- read.csv(paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"), header = T)
+      # Find best model
+      modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), full.names = T)
+      for (i in 1:length(modelFiles)) {
+        modelFile <- grep(models[i, "GCM"], modelFiles, value = T)
+        # Read relevant predictor file
+        buffer <- vect(paste0(outPath, sp, "/Buffer/buffer.shp"))
+        predFiles <- list.files(predPath, full.names = T)
+        predFiles <- grep(strsplit(strsplit(modelFile, "ase_")[[1]][2], "_current")[[1]][1], predFiles, value = T)
+        predFilesCurrent <- predFiles[grepl("current", predFiles)]
+        preds <- rast(predFilesCurrent)
+        # Extract environment
+        backgroundEnv <- terra::extract(preds, background_filtered, ID = F)
+        presencesEnv <- terra::extract(preds, presences, ID = F)
+        names(backgroundEnv) <- c("BIO1", paste0("BIO", 10:19), paste0("BIO", 2:9), "CEC", "CFVO", "clay", "pH", "sand", "silt", "SOC",
+                                  "HAD_mean", "HAD_median", "HAD_q0.75",
+                                  "HAS_mean", "HAS_median", "HAS_q0.75",
+                                  "HMD_mean", "HMD_median", "HMD_q0.75",
+                                  "HMS_mean", "HMS_median", "HMS_q0.75")
+        names(presencesEnv) <- c("BIO1", paste0("BIO", 10:19), paste0("BIO", 2:9), "CEC", "CFVO", "clay", "pH", "sand", "silt", "SOC",
+                                 "HAD_mean", "HAD_median", "HAD_q0.75",
+                                 "HAS_mean", "HAS_median", "HAS_q0.75",
+                                 "HMD_mean", "HMD_median", "HMD_q0.75",
+                                 "HMS_mean", "HMS_median", "HMS_q0.75")
+        # Predict suitability
+        load(modelFile)
+        suitValsPres <- predict(model@models$fc.LQP_rm.1, newdata = presencesEnv, clamp = F, type = "cloglog")
+        suitValsPres <- as.data.frame(suitValsPres)
+        suitValsPres$Presence <- 1
+        suitValsBackground <- predict(model@models$fc.LQP_rm.1, newdata = backgroundEnv, clamp = F, type = "cloglog")
+        suitValsBackground <- as.data.frame(suitValsBackground)
+        suitValsBackground$Presence <- 0
+        suitVals <- rbind(suitValsPres, suitValsBackground)
+        names(suitVals)[1] <- "Suitability"
+        # Calculate AUC
+        roc <- roc(suitVals$Presence, suitVals$Suitability, quiet = T)
+        models[i, paste0("AUC_", distances[j])] <- as.numeric(auc(roc))
+      }
+      write.csv(models, paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"), row.names = F)
+    }
+  }
+}
+
+# Create suitability and binary maps for best models and calculate range size statistics
+for (currentSpecies in 1:length(spList)) {
+  # Get species name
+  sp <- strsplit(spList[currentSpecies], "/", fixed = T)[[1]]
+  sp <- sp[length(sp)]
+  sp <- strsplit(sp, ".", fixed = T)[[1]][1]
+  print(sp)
+  
+  # Delete previous runs
+  unlink(paste0(outPath, sp, "/BinaryMapsBestModel/"), recursive = T)
+  unlink(paste0(outPath, sp, "/BinaryMapsNoDispBestModel/"), recursive = T)
+  unlink(paste0(outPath, sp, "/RangeSizesBestModel/"), recursive = T)
+  
+  # Get best model
+  if (file.exists(paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"))) {
+    models <- read.csv(paste0(outPath, sp, "/ModelSetComparison/modelSetComparison.csv"), header = T)
+    models <- subset(models, AverageValidationAUC > aucThreshold)
+    models <- subset(models, AUC_50000 > aucDistanceThreshold)
+    if (nrow(models) == 0) {
+      print("No models above AUC threshold.")
+      next
+    }
+    else {
+      # Find best model
+      modelFiles <- list.files(paste0(outPath, sp, "/ENM/"), full.names = T)
+      modelFiles <- grep(models[1, "GCM"], modelFiles, value = T)
+      # Crop predictor files using buffer
+      print(paste0("Cropping predictor files for species: ", sp))
+      buffer <- vect(paste0(outPath, sp, "/Buffer/buffer.shp"))
+      predFiles <- list.files(predPath, full.names = T)
+      predFiles <- grep(strsplit(strsplit(modelFiles, "ase_")[[1]][2], "_current")[[1]][1], predFiles, value = T)
+      predFilesCurrent <- predFiles[grepl("current", predFiles)]
+      predFilesFuture <- predFiles[!grepl("current", predFiles)]
+      dir.create(paste0(outPath, sp, "/CroppedPredictors/"))
+      dir.create(paste0(outPath, sp, "/CroppedPredictors/Current/"))
+      dir.create(paste0(outPath, sp, "/CroppedPredictors/Future/"))
+      for (i in 1:length(predFilesCurrent)) {
+        preds <- predFilesCurrent[i]
+        cropPredictors(preds, buffer, paste0(outPath, sp, "/CroppedPredictors/Current/"))
+      }
+      for (i in 1:length(predFilesFuture)) {
+        preds <- predFilesFuture[i]
+        cropPredictors(preds, buffer, paste0(outPath, sp, "/CroppedPredictors/Future/"))
+      }
+      # Predict suitability
+      dir.create(paste0(outPath, sp, "/SuitabilityMapsBestModel/"))
+      dir.create(paste0(outPath, sp, "/SuitabilityMapsBestModel/Current/"))
+      dir.create(paste0(outPath, sp, "/SuitabilityMapsBestModel/Future/"))
+      croppedPreds <- list.files(paste0(outPath, sp, "/CroppedPredictors/Current"), full.names = T)
+      for (i in 1:length(croppedPreds)) {
+        predictSuitability(modelFiles, croppedPreds[i], outDir = paste0(outPath, sp, "/SuitabilityMapsBestModel/Current/"))
+      }
+      croppedPreds <- list.files(paste0(outPath, sp, "/CroppedPredictors/Future"), full.names = T)
+      for (i in 1:length(croppedPreds)) {
+        predictSuitability(modelFiles, croppedPreds[i], outDir = paste0(outPath, sp, "/SuitabilityMapsBestModel/Future/"))
+      }
+      unlink(paste0(outPath, sp, "/CroppedPredictors/"), recursive = T)
+      # Get threshold
+      thresholds <- read.csv(paste0(outPath, sp, "/Thresholds/thresholds.csv"), header = T)
+      threshold <- thresholds[grepl(models[1, "GCM"], thresholds$Model), "Threshold"]
+      # Threshold suitability maps
+      dir.create(paste0(outPath, sp, "/BinaryMapsBestModel/"))
+      dir.create(paste0(outPath, sp, "/BinaryMapsBestModel/Current/"))
+      dir.create(paste0(outPath, sp, "/BinaryMapsBestModel/Future/"))
+      suitMaps <- list.files(paste0(outPath, sp, "/SuitabilityMapsBestModel/"), pattern = "tif$", full.names = T, include.dirs = F, recursive = T)
+      for (i in 1:length(suitMaps)) {
+        tmpMap <- rast(suitMaps[i])
+        binaryMap <- tmpMap > threshold
+        binaryMap <- sum(binaryMap)
+        outName <- gsub("SuitabilityMapsBestModel", "BinaryMapsBestModel", suitMaps[i])
+        writeRaster(binaryMap, outName, overwrite = T)
+      }
+      unlink(paste0(outPath, sp, "/SuitabilityMapsBestModel/"), recursive = T)
+      # Calculate range sizes
+      dir.create(paste0(outPath, sp, "/RangeSizesBestModel/"))
+      rangeSizes <- data.frame(Map = character(),
+                               RangeSize = numeric(),
+                               RangeSizeChange = numeric())
+      binaryMaps <- list.files(paste0(outPath, sp, "/BinaryMapsBestModel/"), pattern = "tif$", full.names = T, include.dirs = F, recursive = T)
+      for (i in 1:length(binaryMaps)) {
+        tmpMap <- rast(binaryMaps[i])
+        size <- freq(tmpMap, digits = NA, value = 1, bylayer = F)[1, 2]
+        rangeSizes[i, "Map"] <- binaryMaps[i]
+        rangeSizes[i, "GCM"] <- strsplit(strsplit(binaryMaps[i], "ase_")[[1]][2], "_", fixed = T)[[1]][1]
+        rangeSizes[i, "Time"] <- strsplit(strsplit(strsplit(binaryMaps[i], "ase_")[[1]][2], "_", fixed = T)[[1]][2], ".", fixed = T)[[1]][1]
+        rangeSizes[i, "RangeSize"] <- size
+        rangeSizes[i, "GeneratingModel"] <- strsplit(strsplit(modelFiles, "ase_")[[1]][2], "_current")[[1]][1]
+      }
+      GCMs <- unique(rangeSizes$GCM)
+      for (i in 1:length(GCMs)) {
+        currentSize <- subset(rangeSizes, GCM == GCMs[i] & Time == "current")$RangeSize
+        for (j in 1:nrow(rangeSizes)) {
+          if (rangeSizes[j, "GCM"] == GCMs[i] & rangeSizes[j, "Time"] != "current") {
+            rangeSizes[j, "RangeSizeChange"] <- rangeSizes[j, "RangeSize"] / currentSize
+          }
+        }
+      }
+      write.csv(rangeSizes, paste0(outPath, sp, "/RangeSizesBestModel/rangeSizes.csv"), row.names = F)
+      # Read zero-dispersal buffer
+      buffer0 <- vect(paste0(outPath, sp, "/BufferNull/buffer.shp"))
+      # Crop binary maps
+      dir.create(paste0(outPath, sp, "/BinaryMapsNoDispBestModel/"))
+      dir.create(paste0(outPath, sp, "/BinaryMapsNoDispBestModel/Current/"))
+      dir.create(paste0(outPath, sp, "/BinaryMapsNoDispBestModel/Future/"))
+      binaryMaps <- list.files(paste0(outPath, sp, "/BinaryMapsBestModel/"), pattern = "tif$", full.names = T, include.dirs = F, recursive = T)
+      for (i in 1:length(binaryMaps)) {
+        tmpMap <- rast(binaryMaps[i])
+        croppedMap <- crop(tmpMap, buffer0)
+        outName <- gsub("BinaryMapsBestModel", "BinaryMapsNoDispBestModel", binaryMaps[i])
+        writeRaster(croppedMap, outName, overwrite = T)
+      }
+      # Calculate range sizes without dispersal
+      rangeSizes <- data.frame(Map = character(),
+                               RangeSize = numeric(),
+                               RangeSizeChange = numeric())
+      binaryMaps <- list.files(paste0(outPath, sp, "/BinaryMapsNoDispBestModel/"), pattern = "tif$", full.names = T, include.dirs = F, recursive = T)
+      for (i in 1:length(binaryMaps)) {
+        tmpMap <- rast(binaryMaps[i])
+        size <- freq(tmpMap, digits = NA, value = 1, bylayer = F)[1, 2]
+        rangeSizes[i, "Map"] <- binaryMaps[i]
+        rangeSizes[i, "GCM"] <- strsplit(strsplit(binaryMaps[i], "ase_")[[1]][2], "_", fixed = T)[[1]][1]
+        rangeSizes[i, "Time"] <- strsplit(strsplit(strsplit(binaryMaps[i], "ase_")[[1]][2], "_", fixed = T)[[1]][2], ".", fixed = T)[[1]][1]
+        rangeSizes[i, "RangeSize"] <- size
+        rangeSizes[i, "GeneratingModel"] <- strsplit(strsplit(modelFiles, "ase_")[[1]][2], "_current")[[1]][1]
+      }
+      GCMs <- unique(rangeSizes$GCM)
+      for (i in 1:length(GCMs)) {
+        currentSize <- subset(rangeSizes, GCM == GCMs[i] & Time == "current")$RangeSize
+        for (j in 1:nrow(rangeSizes)) {
+          if (rangeSizes[j, "GCM"] == GCMs[i] & rangeSizes[j, "Time"] != "current") {
+            rangeSizes[j, "RangeSizeChange"] <- rangeSizes[j, "RangeSize"] / currentSize
+          }
+        }
+      }
+      write.csv(rangeSizes, paste0(outPath, sp, "/RangeSizesBestModel/rangeSizesNoDisp.csv"), row.names = F)
+    }
+  }
+  else {
+    print("No models found.")
+    next
+  }
 }

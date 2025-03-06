@@ -2,6 +2,7 @@ library(terra)
 library(dplyr)
 library(paran)
 library(ggplot2)
+library(flexclust)
 
 # This function checks if a minimum of n presence points are available for model fitting
 # 1. At least n records must be present
@@ -25,7 +26,6 @@ checkSampleSize <- function(occ, preds, n) {
 
 # This function extracts all cells with presences that have unique predictor values
 # NOTE: mostPreds should represent an environmental layers file with a complete set of predictors as to build equivalent models when comparing variable selection methods
-# NOTE: Spatial thinning is implicitly performed by only retaining a single point per grid cell
 getPresenceRecords <- function(occ, mostPreds) {
   preds <- rast(mostPreds)
   spOcc <- vect(occ, crs = crs(preds))
@@ -40,7 +40,11 @@ getPresenceRecords <- function(occ, mostPreds) {
 # NOTE: occurrence data should be unprojected
 buildBuffer <- function(occ, distance, preds, outName, plot = F) {
   chull <- convHull(occ)
-  buffer <- buffer(chull, distance)
+  if (distance > 0) { 
+    buffer <- buffer(chull, distance)
+  } else {
+    buffer <- chull
+  }
   preds <- rast(preds)
   buffer <- project(buffer, crs(preds))
   writeVector(buffer, outName, overwrite = T)
@@ -56,13 +60,6 @@ cropPredictors <- function(preds, buffer, outDir) {
   outName <- strsplit(preds, "/", fixed = T)
   outName <- outName[[1]][length(outName[[1]])]
   layerTemplate <- strsplit(outName, "_", fixed = T)[[1]][1]
-  if (layerTemplate == "a") layerNames <- c("BIO1", paste0("BIO", 10:19), paste0("BIO", 2:9))
-  if (layerTemplate == "as") layerNames <- c("BIO1", paste0("BIO", 10:19), paste0("BIO", 2:9), "CEC", "CFVO", "clay", "pH", "sand", "silt", "SOC")
-  if (layerTemplate == "ae") layerNames <- c("BIO1", paste0("BIO", 10:19), paste0("BIO", 2:9), 
-                                             "HAD_mean", "HAD_median", "HAD_q0.75",
-                                             "HAS_mean", "HAS_median", "HAS_q0.75",
-                                             "HMD_mean", "HMD_median", "HMD_q0.75",
-                                             "HMS_mean", "HMS_median", "HMS_q0.75")
   if (layerTemplate == "ase") layerNames <- c("BIO1", paste0("BIO", 10:19), paste0("BIO", 2:9), "CEC", "CFVO", "clay", "pH", "sand", "silt", "SOC",
                                               "HAD_mean", "HAD_median", "HAD_q0.75",
                                               "HAS_mean", "HAS_median", "HAS_q0.75",
@@ -76,125 +73,183 @@ cropPredictors <- function(preds, buffer, outDir) {
 }
 
 # This function samples background points from an environmental layers file
-sampleBackground <- function(preds, pres, no) {
+sampleBackground <- function(preds, no) {
   preds <- raster::stack(preds)
-  bgSample <- dismo::randomPoints(preds, no, pres, lonlatCorrection = F)
+  bgSample <- dismo::randomPoints(preds, no, lonlatCorrection = F)
   return(bgSample)
 }
 
-# This function fits a PCA model on a set of background points. Parallel analysis is performed.
-# NOTE: zero-variance variables are removed
-fitPCA <- function(preds, bgPoints, outDir, seedNo) {
-  outName <- strsplit(preds, "/", fixed = T)
-  outName <- outName[[1]][length(outName[[1]])]
-  outName <- strsplit(outName, ".", fixed = T)
-  outName <- outName[[1]][1]
-  preds <- rast(preds)
-  extr <- terra::extract(preds, bgPoints, cells = F, xy = F, ID = F)
-  extr <- extr[, which(apply(extr, 2, var) != 0)]
-  model <- prcomp(extr, center = T, scale. = T)
-  parHorn <- paran(extr, centile = 95, seed = seedNo, iterations = 1000, quietly = T, status = F)$Retained
-  save(model, parHorn, file = paste0(outDir, outName, ".rda"))
-  return(parHorn)
+# This function removes correlated predictors
+removeCorrelatedPredictors <- function(env, corrThreshold, outName, seedNo) {
+  set.seed(seedNo)
+  c1 <- cor(values(env), use = "complete.obs")
+  # Toss variables that were all NULL, NA, NaN, or 0 SD
+  tossed <- NULL
+  bad <- which(apply(c1, 1, function(x) {
+    all(is.na(x)) | all(is.nan(x)) | all(is.null(x)) | sum(x, na.rm = T) == 1
+  }))
+  if (length(bad) > 0) {
+    tossed <- c(tossed, names(bad))
+    c1.index <- which(colnames(c1) %in% tossed)
+    c1 <- c1[-c1.index, -c1.index]
+  }
+  # Toss variables that are too correlated with other variables
+  too.cor <- apply(abs(c1) > corrThreshold, 1, sum) - 1
+  
+  while (any(too.cor >= 1)) {
+    most.cor <- too.cor[too.cor == max(too.cor)]
+    toss <- sample(1:length(most.cor), 1)
+    tossed <- c(tossed, names(most.cor[toss]))
+    c1.index <- which(colnames(c1) %in% tossed)
+    c1 <- c1[-c1.index, -c1.index]
+    too.cor <- apply(abs(c1) > corrThreshold, 1, sum) - 1
+  }
+  
+  if (!is.null(tossed)) env <- env[[-which(names(env) %in% tossed)]]
+  writeRaster(env, outName)
+  return(tossed)
 }
 
-# This function transforms predictors using a PCA model
-# NOTE: a minimum of 2 PCs is always retained
-transformPCA <- function(preds, modelDir, outDir) {
-  outName <- strsplit(preds, "/", fixed = T)
-  outName <- outName[[1]][length(outName[[1]])]
-  outName <- strsplit(outName, ".", fixed = T)
-  outName <- outName[[1]][1]
-  preds <- rast(preds)
-  predsValues <- values(preds)
-  load(paste0(modelDir, outName, ".rda"))
-  trans <- predict(model, predsValues)
-  predsTrans <- preds[[1:ncol(trans)]]
-  values(predsTrans) <- trans
-  predsTrans <- predsTrans[[1:max(parHorn, 2)]]
-  names(predsTrans) <- paste0("PC", 1:max(parHorn, 2))
-  writeRaster(predsTrans, paste0(outDir, outName, ".tif"), overwrite = T)
-  return(TRUE)
+# This function spatially stratifies occurrence data
+spatialStratify <- function(sp.pts, seedNo) {
+  set.seed(seedNo)
+  out <- try({
+    n <- nrow(sp.pts)
+    focal.pres <- sp.pts
+    combine.subclusters <- function(n.sub, folds, folds2) {
+      # Combine subclusters to get desired number of folds
+      combine.folds <- lapply(1:50, function(z) { matrix(sample(1:nrow(folds.tmp$centers), n.sub, replace = FALSE), ncol = n.sub / 5)})
+      fold.candidates <- lapply(1:length(combine.folds), function(jj) {
+        for (ii in 1:nrow(combine.folds[[jj]])) { folds[folds2 %in% c(combine.folds[[jj]][ii,])] = ii }
+        folds
+      })
+      fold.entropy <- sapply(1:length(fold.candidates), function(ii) {
+        t <- table(fold.candidates[[ii]]) / length(fold.candidates[[ii]])
+        -1*sum(t*log(t))
+      })
+      best <- which.max(fold.entropy)
+      fold.candidates[[best]]
+    }
+    
+    if (n > 5 & n <= 15) {
+      folds.tmp <- kmeans(sp.pts, 5)
+      folds.tmp1 <- flexclust::as.kcca(folds.tmp, data = sp.pts)
+      focal.pres$folds <- folds.tmp$cluster
+    }
+    if (n > 15 & n <= 30) {
+      n.sub <- 10
+      folds.tmp <- kmeans(sp.pts, n.sub)
+      folds.tmp1 <- flexclust::as.kcca(folds.tmp, data = sp.pts)
+      focal.pres$folds <- combine.subclusters(n.sub, folds.tmp$clust, folds.tmp$clust)
+    }
+    if (n > 30 & n <= 45) {
+      n.sub <- 15
+      folds.tmp <- kmeans(sp.pts, n.sub)
+      folds.tmp1 <- flexclust::as.kcca(folds.tmp, data = sp.pts)
+      focal.pres$folds <- combine.subclusters(n.sub, folds.tmp$clust, folds.tmp$clust)
+    }
+    if (n > 45 & n <= 60) {
+      n.sub <- 20
+      folds.tmp <- kmeans(sp.pts, n.sub)
+      folds.tmp1 <- flexclust::as.kcca(folds.tmp, data = sp.pts)
+      focal.pres$folds <- combine.subclusters(n.sub, folds.tmp$clust, folds.tmp$clust)
+    }
+    if (n > 60) {
+      n.sub <- 25
+      folds.tmp <- kmeans(sp.pts, n.sub)
+      folds.tmp1 <- flexclust::as.kcca(folds.tmp, data = sp.pts)
+      focal.pres$folds <- combine.subclusters(n.sub, folds.tmp$clust, folds.tmp$clust)
+    }
+    
+    sp.pts <- focal.pres
+    return(sp.pts)
+  })
+  return(out)
 }
 
 # This function fits Maxent models
-fitModel <- function(pres, preds, bg, sp, outDir, tune.args, numCores, plot) {
+fitModel <- function(pres, preds, bg, sp, outDir, tune.args, numCores, plot, folds) {
   outName <- strsplit(preds, "/", fixed = T)
   outName <- outName[[1]][length(outName[[1]])]
   outName <- strsplit(outName, ".", fixed = T)
   outName <- outName[[1]][1]
-  model <- ENMevaluate(occs = pres,
+  partitions <- list(occs.grp = folds,
+                     bg.grp = rep(0, nrow(bg)))
+  colnames(bg) <- colnames(pres)
+  model <- try(ENMevaluate(occs = pres,
                        envs = preds,
                        bg = bg,
                        tune.args = tune.args,
-                       algorithm = "maxnet",
-                       partitions = "block",
+                       algorithm = "CVmaxnet",
+                       partitions = "user",
+                       user.grp = partitions,
                        doClamp = F,
                        taxon.name = sp,
                        overlap = F,
-                       parallel = T,
+                       parallel = F,
                        numCores = numCores,
-                       quiet = T)
-  save(model, file = paste0(outDir, outName, ".rda"))
+                       quiet = T))
+  if (class(model) == "try-error") {
+      model <- NULL
+    # other.args <- list(regfun = maxnet.default.regularization)
+    # model <- ENMevaluate(occs = pres,
+    #                      envs = preds,
+    #                      bg = bg,
+    #                      tune.args = tune.args,
+    #                      algorithm = "maxnet",
+    #                      partitions = "user",
+    #                      user.grp = partitions,
+    #                      doClamp = F,
+    #                      taxon.name = sp,
+    #                      overlap = F,
+    #                      parallel = F,
+    #                      numCores = numCores,
+    #                      quiet = T,
+    #                      other.settings = list(other.args = other.args))
+  }
+  if (!is.null(model)) save(model, file = paste0(outDir, outName, ".rda"))
   if (plot) {
     modelStats <- evalplot.stats(model, stats = c("or.10p", "auc.val"), x.var = "rm", color = "fc", dodge = 0.5)
     ggsave(paste0(outDir, outName, ".png"), modelStats)
   }
-  return(TRUE)
+  return(model@algorithm)
 }
 
-# This function performs model selection by selecting models with the lowest average test omission rate, breaking ties with the highest average validation AUC,
-# then lowest AICc, then by highest regularization multiplier, then by preferring H > LQ > LQH.
-# Null models are (optionally) created.
-selectModel <- function(modelSet, outDirModel, numCores, nullModels, outDirNulls) {
-  # Select best model
-  outName <- strsplit(modelSet, "/", fixed = T)
-  outName <- outName[[1]][length(outName[[1]])]
-  outName <- strsplit(outName, ".", fixed = T)
-  outName <- outName[[1]][1]
-  load(modelSet)
-  res <- eval.results(model)
-  opt.seq <- res %>% 
-    filter(or.10p.avg == min(or.10p.avg)) %>% 
-    filter(auc.val.avg == max(auc.val.avg)) %>%
-    filter(AICc == min(AICc)) %>%
-    filter(as.numeric(rm) == max(as.numeric(rm))) %>%
-    filter(nchar(as.character(fc)) == min(nchar(as.character(fc))))
-  bestModel <- eval.models(model)[[opt.seq$tune.args]]
-  save(bestModel, opt.seq, file = paste0(outDirModel, outName, ".rda"))
-  # Save metadata
-  rmm <- eval.rmm(model)
-  rmm$model$selectionRules <- "Lowest 10 percentile omission rate, break ties with average validation AUC and then AICc and then regularization and then feature complexity."
-  rmm$model$finalModelSettings <- paste0(as.character(opt.seq$fc), as.character(opt.seq$rm))
-  rangeModelMetadata::rmmToCSV(rmm, paste0(outDirModel, outName, ".csv"))
-  # Create null models
-  if (nullModels) {
-    mod.null <- ENMnulls(model, mod.settings = list(fc = as.character(opt.seq$fc), rm = as.numeric(opt.seq$rm)), no.iter = 100,
-                         eval.stats = c("auc.val", "or.10p"),
-                         parallel = F,
-                         numCores = numCores,
-                         quiet = T)
-    summ.table <- null.emp.results(mod.null)
-    save(mod.null, summ.table, file = paste0(outDirNulls, outName, ".rda"))
-    nullPlots <- evalplot.nulls(mod.null, stats = c("or.10p", "auc.val"), plot.type = "histogram")
-    ggsave(paste0(outDirNulls, outName, ".png"), nullPlots)
-  }
-  return(TRUE)
+# This function calculates BIC of a cv.glmnet model, following Renner et al. (2021).
+cv_bic <- function(fit, finalPres){
+  whlm <- which(fit$lambda == fit$lambda.value)
+  with(fit$glmnet.fit,
+       {
+         tLL <- nulldev - nulldev * (1 - dev.ratio)[whlm]
+         k <- df[whlm]
+         return(log(finalPres) * k - tLL)
+       })
 }
 
-# This function compares model sets based on AICc.
+# This function calculates BIC of a glmnet model, following Renner et al. (2021).
+bic <- function(fit, finalPres){
+  with(fit,
+       {
+         tLL <- nulldev - nulldev * (1 - dev.ratio)[200]
+         k <- df[200]
+         return(log(finalPres) * k - tLL)
+       })
+}
+
+# This function compares model sets based on BIC.
 compareModelSets <- function(modelSets, nullModels, outDir) {
   nrow <- length(modelSets)
   comp <- data.frame(VariableSet = character(),
                      GCM = character(),
-                     FeatureComplexity = character(),
-                     RegularizationMultiplier = numeric(),
-                     AICc = numeric(),
-                     DeltaAICc = numeric(),
+                     Algorithm = character(),
+                     LambdaRule = character(),
+                     BIC = numeric(),
+                     DeltaBIC = numeric(),
                      AverageValidationAUC = numeric(),
                      SignificanceAUC = numeric(),
                      AverageOmissionRate = numeric(),
-                     SignificanceOmissionRate = numeric())
+                     SignificanceOmissionRate = numeric(),
+                     Variables = character())
   for (i in 1:nrow) {
     tmp <- modelSets[i]
     outName <- strsplit(tmp, "/", fixed = T)
@@ -208,19 +263,26 @@ compareModelSets <- function(modelSets, nullModels, outDir) {
       comp[i, "GCM"] <- strsplit(outName, "_", fixed = T)[[1]][2]
     }
     load(tmp)
-    comp[i, "FeatureComplexity"] <- as.character(opt.seq$fc)
-    comp[i, "RegularizationMultiplier"] <- as.numeric(levels(opt.seq$rm))[opt.seq$rm]
-    comp[i, "AICc"] <- opt.seq$AICc
-    comp[i, "AverageValidationAUC"] <- opt.seq$auc.val.avg
-    comp[i, "AverageOmissionRate"] <- opt.seq$or.10p.avg
+    comp[i, "AverageValidationAUC"] <- eval.results(model)$auc.val.avg
+    comp[i, "AverageOmissionRate"] <- eval.results(model)$or.10p.avg
+    comp[i, "Algorithm"] <- model@algorithm
+    if (model@algorithm == "CVmaxnet") {
+      comp[i, "LambdaRule"] <- model@models$fc.LQP_rm.1$lambdaRule
+      comp[i, "BIC"] <- cv_bic(model@models$fc.LQP_rm.1, nrow(model@occs))
+    }
+    else {
+      comp[i, "LambdaRule"] <- NA
+      comp[i, "BIC"] <- bic(model@models$fc.LQP_rm.1, nrow(model@occs))
+    }
+    comp[i, "Variables"] <- paste0(names(model@models$fc.LQP_rm.1$betas), collapse = ",")  
     if (length(nullModels) == nrow) {
       load(nullModelFiles[i])
       comp[i, "SignificanceAUC"] <- summ.table[summ.table$statistic == "pvalue", "auc.val"]
       comp[i, "SignificanceOmissionRate"] <- summ.table[summ.table$statistic == "pvalue", "or.10p"]
     }
   }
-  comp$DeltaAICc <- comp$AICc - min(comp$AICc)
-  comp <- arrange(comp, DeltaAICc)
+  comp$DeltaBIC <- comp$BIC - min(comp$BIC)
+  comp <- arrange(comp, DeltaBIC)
   write.csv(comp, paste0(outDir, "modelSetComparison.csv"), row.names = F)
 }
 
@@ -232,31 +294,16 @@ predictSuitability <- function(model, preds, outDir) {
   outName <- outName[[1]][1]
   load(model)
   preds <- raster::stack(preds)
-  suit <- enm.maxnet@predict(bestModel, envs = preds, other.settings = list(doClamp = F, pred.type = "cloglog"))
-  suit <- rast(suit)
+  options(na.action = "na.pass")
+  suitVals <- predict(model@models$fc.LQP_rm.1, newdata = values(preds), clamp = F, type = "cloglog")
+  options(na.action = "na.omit")
+  suit <- preds[[1]]
+  values(suit) <- suitVals
   writeRaster(suit, paste0(outDir, outName, ".tif"), overwrite = T)
+  suitMap <- rast(paste0(outDir, outName, ".tif"))
   png(filename = paste0(outDir, outName, ".png"), width = 10, height = 10, units = "in", res = 320)
-  plot(suit, range = c(0, 1))
+  plot(suitMap, range = c(0, 1))
   dev.off()
-}
-
-# This function transforms predictors using a PCA model for future environments
-# NOTE: a minimum of 2 PCs is always retained
-transferPCA <- function(preds, PCAmodel, outDir) {
-  outName <- strsplit(preds, "/", fixed = T)
-  outName <- outName[[1]][length(outName[[1]])]
-  outName <- strsplit(outName, ".", fixed = T)
-  outName <- outName[[1]][1]
-  preds <- rast(preds)
-  predsValues <- values(preds)
-  load(PCAmodel)
-  trans <- predict(model, predsValues)
-  predsTrans <- preds[[1:ncol(trans)]]
-  values(predsTrans) <- trans
-  predsTrans <- predsTrans[[1:max(parHorn, 2)]]
-  names(predsTrans) <- paste0("PC", 1:max(parHorn, 2))
-  writeRaster(predsTrans, paste0(outDir, outName, ".tif"), overwrite = T)
-  return(TRUE)
 }
 
 # This function extracts summaries from predictors for plotting
@@ -283,7 +330,6 @@ extractPredSummary <- function(predsCurrent, predsFutureDir, occ, outDir) {
   }
   for (i in 1:length(tmpPreds)) {
     tmpFut <- rast(tmpPreds[i])
-    apply(values(tmpFut), 2, min, na.rm = T)
     summStats[4,] <- pmin(apply(values(tmpFut), 2, min, na.rm = T), summStats[4,], na.rm = T)
     summStats[5,] <- pmin(apply(values(tmpFut), 2, max, na.rm = T), summStats[5,], na.rm = T)
   }
@@ -293,13 +339,12 @@ extractPredSummary <- function(predsCurrent, predsFutureDir, occ, outDir) {
 }
 
 # This function creates marginal effect plots
-plotMarginal <- function(summFile, pcaFile, modelFile, outDir) {
+plotMarginal <- function(summFile, modelFile, outDir) {
   outName <- strsplit(summFile, "/", fixed = T)
   outName <- outName[[1]][length(outName[[1]])]
   outName <- strsplit(outName, ".", fixed = T)
   outName <- outName[[1]][1]
   summStats <- read.csv(summFile, header = T, row.names = 1)
-  load(pcaFile)
   load(modelFile)
   png(filename = paste0(outDir, outName, ".png"), width = 20, height = 20, units = "in", res = 320)
   par(mfrow = c(ceiling(ncol(summStats) / 4), 4))
@@ -314,9 +359,7 @@ plotMarginal <- function(summFile, pcaFile, modelFile, outDir) {
     }
     colnames(tmpSeq) <- colnames(summStats)
     tmpSeq <- as.data.frame(tmpSeq)
-    tmpSeqTrans <- predict(model, tmpSeq)
-    tmpSeqTrans <- tmpSeqTrans[, 1:max(parHorn, 2)]
-    suit <- enm.maxnet@predict(bestModel, envs = tmpSeqTrans, other.settings = list(doClamp = F, pred.type = "cloglog"))
+    suit <- predict(model@models$fc.LQP_rm.1, newdata = tmpSeq, clamp = F, type = "cloglog")
     plot(tmpSeq[, i], suit, type = "l", xlab = colnames(tmpSeq)[i], ylab = "Suitability")
   }
   dev.off()
@@ -328,7 +371,7 @@ getThresholds <- function(suitMaps, pres, centile, outDir) {
                                Threshold = numeric())
   for (i in 1:length(suitMaps)) {
     suits <- terra::extract(rast(suitMaps[i]), pres, ID = F)
-    p10 <- quantile(suits$layer, centile, na.rm = T, names = F)
+    p10 <- quantile(suits[[1]], centile, na.rm = T, names = F)
     modelName <- rev(strsplit(suitMaps[i], "/")[[1]])[1]
     modelName <- strsplit(modelName, ".", fixed = T)[[1]][1]
     modelName <- strsplit(modelName, "_current", fixed = T)[[1]][1]
@@ -363,31 +406,4 @@ threshold <- function(suitMaps, thresholds, outDir) {
     rangeSizes[, "RangeSizeChange"] <- paste0(round((rangeSizes[, "RangeSize"] - rangeSizes[1, "RangeSize"]) / rangeSizes[1, "RangeSize"] * 100, 1), "%")
     write.csv(rangeSizes, paste0(outDir, rangeSizes[1, 1], ".csv"), row.names = F)
   }
-}
-
-# This function calculates AICc weights (cf. Wagenmakers & Farrell, 2004) for a set of suitability maps
-calculateWeights <- function(suitMaps, modelQuality) {
-  AIC <- read.csv(modelQuality, header = T)
-  weights <- data.frame(VariableSet = character(length(suitMaps)),
-                        GCM = character(length(suitMaps)),
-                        AICc = numeric(length(suitMaps)))
-  for (i in 1:length(suitMaps)) {
-    modelName <- unlist(strsplit(suitMaps[i], "/"))
-    modelName <- modelName[length(modelName)]
-    modelName <- unlist(strsplit(modelName, "_"))
-    weights[i, "VariableSet"] <- toupper(modelName[1])
-    if (modelName[1] %in% c("a", "as", "ac", "asc")) {
-      weights[i, "GCM"] <- NA
-      weights[i, "AICc"] <- subset(AIC, VariableSet == weights[i, "VariableSet"])$AICc
-    }
-    else {
-      weights[i, "GCM"] <- toupper(modelName[2])
-      weights[i, "AICc"] <- subset(AIC, VariableSet == weights[i, "VariableSet"] & GCM == weights[i, "GCM"])$AICc
-    }
-  }
-  weights$DeltaAICc <- weights$AICc - min(weights$AICc)
-  weights$weightNum <- exp(-0.5*weights$DeltaAICc)
-  weights$weightDenom <- sum(weights$weightNum)
-  weights$weight <- weights$weightNum / weights$weightDenom
-  return(weights)
 }

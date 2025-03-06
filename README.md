@@ -28,16 +28,10 @@ Occurrence data preparation
 Create models and maps
 * functions.R: auxiliary functions.
 * workflow.R: performs modeling workflow.
-* NOTE: For a further 24 species, sample size requirements were not met.
-* NOTE: For 23 species, models failed to properly converge. These were excluded from analyses. Species: Cipocereus crassisepalus, Brachycereus nesioticus, Cereus mirabella, Discocactus bahiensis, Frailea pumila, Gymnocalycium schroederianum, Harrisia tortuosa, Maihueniopsis conoidea, Melocactus inconcinnus, M. levitestatus, M. pachyacanthus, Opuntia aurantiaca, O. bonaerensis, O. nemoralis, O. undulata, Parodia carambeiensis, P. oxycostata, Pelecyphora zilziana, Pterocactus fischeri, Rhipsalis grandiflora, R. shaferi, Selenicereus pteranthus, Strophocactus wittii.
-* NOTE: For 10 species, models could not be properly compared due to the inability to calculate AICc. These were excluded from analyses. Species: Discocactus zehntneri, Espostoa frutescens, Gymnocalycium castellanosii, Mammillaria carmenae, M. moelleriana, M. peninsularis, Opuntia repens, Rapicactus subterraneus, Rhipsalis crispata, R. olivifera.
-* removePoorModels.R: checks for species with AUC below or equal to 0.5, and removes those.
-* NOTE: For 35 species, AUC was below or equal to 0.5. These were excluded from analyses. Species: Austrocactus bertinii, Cereus fricii, C. phatnospermus, Cleistocactus baumannii, Cylindropuntia alcahes, C. waltoniorum, C. x viridiflora, Epithelantha bokei, Eriosyce iquiquensis, Espostoopsis dybowskii, Ferocactus uncinatus, Grusonia schottii, Gymnocalycium hyptiacanthum, G. quehlianum, G. schickendantzii, Lepismium waringianum, Maihueniopsis hickenii, Melocactus bahiensis, Opuntia anacantha, O. aureispina, O. cespitosa, O. feracantha, O. rioplatensis, O. robinsonii, O. x debreczyi, Parodia langsdorfii, P. linkii, P. microsperma, Pilosocerereus flavipulvinatus, P. piauhyensis, Praecereus saxicola, Rhipsalis dissimilis, R. hileiabaiana, Sclerocactus papyracanthus, Tephrocactus articulatus.
 
 Species-level analyses
-* rankTopModels.R: ranks performance by AICc of variable sets (A, AS, AE, ASE) with or without GCMs considered.
-* compareModelPerformance.R: analyzes model performance.
 * rangeChanges.R: analyzes range changes.
+* modelComparison.R: compares model quality and summarizes variable inclusion rates.
 
 Richness-level analyses
 * stackMaps.R: creates richness maps and corresponding summary maps.

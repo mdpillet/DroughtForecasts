@@ -1,97 +1,159 @@
 library(lmerTest)
 library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(glmmTMB)
+library(broom.mixed)
+library(dotwhisker)
+library(ggrepel)
 
 # Set directory structure
-relPath <- "D:/Research/DroughtForecasts/"
+relPath <- "D:/Research/DroughtPredictions/"
 outputPath <- "Outputs/"
-rangeSizePath <- "/RangeSizes/"
 figPath <- "Manuscript/Figures/"
 tablePath <- "Manuscript/Tables/"
 
-# List species
-speciesDirs <- list.dirs(paste0(relPath, outputPath), recursive = F)
+# Summarize range change results
+species <- list.dirs(paste0(relPath, outputPath), recursive = F)
+results <- data.frame(species = species,
+                      bestModel = character(length(species)),
+                      AUC = numeric(length(species)),
+                      variables = character(length(species)),
+                      droughtsIncluded = logical(length(species))) 
 
-# Number of range change calculations per species
-offset <- 36
-
-# Create data frame for range changes
-rangeChanges <- data.frame(Species = character(offset * length(speciesDirs)),
-                           VariableSet = character(offset * length(speciesDirs)),
-                           DroughtGCM = character(offset * length(speciesDirs)),
-                           VariableSetDroughtGCM = character(offset * length(speciesDirs)),
-                           FutureGCM = character(offset * length(speciesDirs)),
-                           SSP = character(offset * length(speciesDirs)),
-                           RangeChange = numeric(offset * length(speciesDirs)))
-
-# Loop over species and calculate range changes
-counter <- 0
-for (i in 1:length(speciesDirs)) {
-  modelFiles <- list.files(paste0(speciesDirs[i], rangeSizePath))
-  sp <- strsplit(speciesDirs[i], "/", fixed = T)[[1]]
-  sp <- sp[length(sp)]
-  print(sp)
-  for (j in 1:length(modelFiles)) {
-    variableSet <- toupper(strsplit(modelFiles[j], "_")[[1]][1])
-    modelGCM <- strsplit(modelFiles[j], "_")[[1]][2]
-    tmp <- read.csv(paste0(speciesDirs[i], rangeSizePath, modelFiles[j]), header = T)
-    for (k in 2:nrow(tmp)) {
-      rangeChange <- tmp[k, "RangeSize"] / tmp[1, "RangeSize"]
-      forecastGCM <- strsplit(tmp[k, "Map"], "_")[[1]][2]
-      SSP <- strsplit(tmp[k, "Map"], "_")[[1]][3]
-      counter <- counter + 1
-      rangeChanges[counter, "Species"] <- sp
-      rangeChanges[counter, "VariableSet"] <- variableSet
-      rangeChanges[counter, "DroughtGCM"] <- modelGCM
-      rangeChanges[counter, "VariableSetDroughtGCM"] <- paste0(variableSet, "_", modelGCM)
-      rangeChanges[counter, "FutureGCM"] <- forecastGCM
-      rangeChanges[counter, "SSP"] <- SSP
-      rangeChanges[counter, "RangeChange"] <- rangeChange
+for (i in 1:length(species)) {
+  print(i)
+  if (file.exists(paste0(species[i], "/ModelSetComparison/modelSetComparison.csv"))) {
+    tmp <- read.csv(paste0(species[i], "/ModelSetComparison/modelSetComparison.csv"), header = T)
+    bestModel <- subset(tmp, AverageValidationAUC > 0.5 & AUC_50000 > 0.7)
+    if (nrow(bestModel) > 0) {
+      changes <- read.csv(paste0(species[i], "/RangeSizesBestModel/rangeSizes.csv"))
+      results[i, "bestModel"] <- changes[1, "GeneratingModel"]
+      results[i, "changeSSP1-2.6"] <- changes[2, "RangeSizeChange"]
+      results[i, "changeSSP3-7.0"] <- changes[3, "RangeSizeChange"]
+      results[i, "changeSSP5-8.5"] <- changes[4, "RangeSizeChange"]
+      changes <- read.csv(paste0(species[i], "/RangeSizesBestModel/rangeSizesNoDisp.csv"))
+      results[i, "changeSSP1-2.6NoDisp"] <- changes[2, "RangeSizeChange"]
+      results[i, "changeSSP3-7.0NoDisp"] <- changes[3, "RangeSizeChange"]
+      results[i, "changeSSP5-8.5NoDisp"] <- changes[4, "RangeSizeChange"]
+      results[i, "AUC"] <- bestModel[1, "AverageValidationAUC"]
+      results[i, "AUC_0"] <- bestModel[1, "AUC_0"]
+      results[i, "AUC_25"] <- bestModel[1, "AUC_25000"]
+      results[i, "AUC_50"] <- bestModel[1, "AUC_50000"]
+      results[i, "AUC_75"] <- bestModel[1, "AUC_75000"]
+      results[i, "variables"] <- bestModel[1, "Variables"]
+      if (grepl("H(A[DS]|M[SD])", results[i, "variables"])) {
+        results[i, "droughtsIncluded"] <- T
+      }
+      else {
+        results[i, "droughtsIncluded"] <- F
+      }
+    }
+    else {
+      results[i, "bestModel"] <- NA
     }
   }
+  else {
+    results[i, "bestModel"] <- NA
+  }
 }
-rangeChanges[rangeChanges$DroughtGCM == "current", "DroughtGCM"] <- "NA"
+
+# Clean results
+results <- results[, c("species", "bestModel", "droughtsIncluded", "changeSSP1-2.6", "changeSSP3-7.0", "changeSSP5-8.5", "changeSSP1-2.6NoDisp",
+                       "changeSSP3-7.0NoDisp", "changeSSP5-8.5NoDisp")]
+
+# Convert from wide to long format
+df_long <- results %>%
+  pivot_longer(cols = c("changeSSP1-2.6", "changeSSP3-7.0", "changeSSP5-8.5", "changeSSP1-2.6NoDisp",
+               "changeSSP3-7.0NoDisp", "changeSSP5-8.5NoDisp"), names_to = "SSP_Disp", values_to = "RangeChange")
+
+for (i in 1:nrow(df_long)) {
+  if (df_long[i, "SSP_Disp"] %in% c("changeSSP1-2.6NoDisp", "changeSSP3-7.0NoDisp", "changeSSP5-8.5NoDisp")) df_long[i, "Dispersal"] <- "Dispersal: none"
+  else df_long[i, "Dispersal"] <- "Dispersal: 100 km"
+}
+
+for (i in 1:nrow(df_long)) {
+  if (df_long[i, "SSP_Disp"] %in% c("changeSSP1-2.6NoDisp", "changeSSP1-2.6")) df_long[i, "SSP"] <- "SSP1-2.6"
+  if (df_long[i, "SSP_Disp"] %in% c("changeSSP3-7.0NoDisp", "changeSSP3-7.0")) df_long[i, "SSP"] <- "SSP3-7.0"
+  if (df_long[i, "SSP_Disp"] %in% c("changeSSP5-8.5NoDisp", "changeSSP5-8.5")) df_long[i, "SSP"] <- "SSP5-8.5"
+}
+
+df_long <- df_long[, c("species", "bestModel", "droughtsIncluded", "RangeChange", "Dispersal", "SSP")]
+df_long <- subset(df_long, !is.na(bestModel) & !is.na(RangeChange))
 
 # Regress range changes
-# lmodel <- lm(RangeChange ~ VariableSet + SSP + DroughtGCM + FutureGCM, data = rangeChanges)
-lmodel <- lm(RangeChange ~ VariableSetDroughtGCM + SSP + FutureGCM, data = rangeChanges)
-summary(lmodel)
-confint(lmodel)
-# lmmodel <- lmer(RangeChange ~ VariableSet + SSP + DroughtGCM + FutureGCM + (1|Species), data = rangeChanges)
-lmmodel <- lmer(RangeChange ~ VariableSetDroughtGCM + SSP + FutureGCM + (1|Species), data = rangeChanges)
-coef(summary(lmmodel))
-confint(lmmodel)
+tmodel <- glmmTMB(RangeChange ~ bestModel + Dispersal + droughtsIncluded + SSP + (1 | species),
+                  family = tweedie(link = "log"), data = df_long)
+tmodelSumm <- summary(tmodel)
+tmodelCI <- confint(tmodel)
+exp(summary(tmodel)$coefficients$cond)
+exp(tmodelCI)
 
-# Boxplots of range size changes
-rangeChanges[rangeChanges$VariableSet == "AE", "VariableSet"] <- "AD"
-rangeChanges[rangeChanges$VariableSet == "ASE", "VariableSet"] <- "ASD"
-rangeChanges[rangeChanges$SSP == "SSP126", "SSP"] <- "SSP1-2.6"
-rangeChanges[rangeChanges$SSP == "SSP370", "SSP"] <- "SSP3-7.0"
-rangeChanges[rangeChanges$SSP == "SSP585", "SSP"] <- "SSP5-8.5"
-png(paste0(relPath, figPath, "Fig2.png"), units = "mm", width = 180, height = 180, res = 300)
-ggplot(data = rangeChanges, aes(x = VariableSet, y = RangeChange)) +
-  geom_boxplot(outlier.size = 0.5) + ylim(0, 2) + facet_grid(FutureGCM ~ SSP) + geom_hline(yintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
-  xlab("Variable set") + ylab("Predicted change in suitable climatic area")
+# Create coefficient plot
+tidymodel <- tidy(tmodel, effects = "fixed", conf.int = T) %>%
+  mutate(estimate = exp(estimate),
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high))
+png(paste0(relPath, figPath, "Fig3.png"), units = "mm", width = 180, height = 180, res = 300)
+dwplot(tidymodel, dot_args = list(color = "black"), whisker_args = list(color = "black")) + 
+  theme_bw() + ylab("Independent variable") + xlab("Exponentiated coefficients") +
+  scale_y_discrete(labels = c("SSP5-8.5", "SSP3-7.0", "With severe drought", "No dispersal", "GCM: UKESM1-0-LL", "GCM: MPI-ESM1-2-HR")) + theme(legend.position = "none") +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "black") + scale_x_continuous(breaks = seq(0, max(tidymodel$conf.high), by = 0.5),
+                                                                                        limits = c(0, max(tidymodel$conf.high)))
 dev.off()
 
+
+# Boxplots of range size changes
+df_long[df_long$droughtsIncluded, "Droughts"] <- "Yes"
+df_long[!df_long$droughtsIncluded, "Droughts"] <- "No"
+png(paste0(relPath, figPath, "Fig2.png"), units = "mm", width = 270, height = 180, res = 300)
+ggplot(data = df_long, aes(y = RangeChange, x = Droughts, fill = Droughts)) +
+  geom_violin(size = 1) + ylim(0, 5) + facet_grid(Dispersal ~ SSP) + geom_hline(yintercept = 1, linetype = "dashed", color = "black") + theme_bw() + 
+  ylab("Predicted change in suitable climate area") + xlab("Severe drought variables in model") + theme(legend.position = "none")
+dev.off()
+
+# Summary statistics
+tmp <- subset(df_long, Dispersal == "Dispersal: none" & SSP == "SSP1-2.6")
+table(tmp$droughtsIncluded) / nrow(tmp)
+table(tmp$RangeChange < 1) / nrow(tmp)
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange < 0.20) / nrow(tmp)
+tmp <- subset(df_long, Dispersal == "Dispersal: 100 km" & SSP == "SSP1-2.6")
+table(tmp$RangeChange < 1) / nrow(tmp)
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange < 0.20) / nrow(tmp)
+tmp <- subset(df_long, Dispersal == "Dispersal: none" & SSP == "SSP3-7.0")
+table(tmp$RangeChange < 1) / nrow(tmp)
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange < 0.20) / nrow(tmp)
+tmp <- subset(df_long, Dispersal == "Dispersal: 100 km" & SSP == "SSP3-7.0")
+table(tmp$RangeChange < 1) / nrow(tmp)
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange < 0.20) / nrow(tmp)
+tmp <- subset(df_long, Dispersal == "Dispersal: none" & SSP == "SSP5-8.5")
+table(tmp$RangeChange < 1) / nrow(tmp)
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange < 0.20) / nrow(tmp)
+tmp <- subset(df_long, Dispersal == "Dispersal: 100 km" & SSP == "SSP5-8.5")
+table(tmp$RangeChange < 1) / nrow(tmp)
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange < 0.20) / nrow(tmp)
+
+# Extinction statistics
+tmp <- subset(df_long, Dispersal == "Dispersal: 100 km" & SSP == "SSP1-2.6")
+table(tmp$RangeChange < 0.75) / nrow(tmp)
+table(tmp$RangeChange <= 0.5)
+table(subset(tmp, droughtsIncluded)$RangeChange < 0.1)
+table(subset(tmp, !droughtsIncluded)$RangeChange < 0.1)
+
 # Export range change table for Supplementary Information
-rangeChangesTable <- rangeChanges[, c("Species", "VariableSetDroughtGCM", "FutureGCM", "SSP", "RangeChange")]
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "A_current", "VariableSetDroughtGCM"] <- "A"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "AS_current", "VariableSetDroughtGCM"] <- "AS"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "AE_GFDL-ESM4", "VariableSetDroughtGCM"] <- "AD (GFDL-ESM4)"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "AE_MPI-ESM1-2-HR", "VariableSetDroughtGCM"] <- "AD (MPI-ESM1-2-HR)"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "AE_UKESM1-0-LL", "VariableSetDroughtGCM"] <- "AD (UKESM1-0-LL)"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "ASE_GFDL-ESM4", "VariableSetDroughtGCM"] <- "ASD (GFDL-ESM4)"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "ASE_MPI-ESM1-2-HR", "VariableSetDroughtGCM"] <- "ASD (MPI-ESM1-2-HR)"
-rangeChangesTable[rangeChangesTable$VariableSetDroughtGCM == "ASE_UKESM1-0-LL", "VariableSetDroughtGCM"] <- "ASD (UKESM1-0-LL)"
-write.csv(rangeChangesTable, paste0(relPath, tablePath, "SupplementaryTable2.csv"), row.names = F)
+rangeChangesTable <- df_long[, c("species", "bestModel", "Droughts", "Dispersal", "SSP", "RangeChange")]
+rangeChangesTable$species <- gsub(paste0(relPath, outputPath), "", df_long$species, fixed = T)
+write.csv(rangeChangesTable, paste0(relPath, tablePath, "SupplementaryTable1.csv"), row.names = F)
 
 # Summarize directional range changes by variable set, future GCM, and SSP
-rangeChanges$ChangeDirection <- ifelse(rangeChanges$RangeChange >= 1, "+", "-")
-table(subset(rangeChanges, VariableSet == "A")$ChangeDirection, subset(rangeChanges, VariableSet == "A")$SSP, subset(rangeChanges, VariableSet == "A")$FutureGCM) / length(speciesDirs)
-table(subset(rangeChanges, VariableSet == "A")$ChangeDirection, subset(rangeChanges, VariableSet == "A")$SSP, subset(rangeChanges, VariableSet == "A")$FutureGCM)
-table(subset(rangeChanges, VariableSet == "AS")$ChangeDirection, subset(rangeChanges, VariableSet == "AS")$SSP, subset(rangeChanges, VariableSet == "AS")$FutureGCM) / length(speciesDirs)
-table(subset(rangeChanges, VariableSet == "AS")$ChangeDirection, subset(rangeChanges, VariableSet == "AS")$SSP, subset(rangeChanges, VariableSet == "AS")$FutureGCM)
-table(subset(rangeChanges, VariableSet == "AD")$ChangeDirection, subset(rangeChanges, VariableSet == "AD")$SSP, subset(rangeChanges, VariableSet == "AD")$FutureGCM) / length(speciesDirs)
-table(subset(rangeChanges, VariableSet == "AD")$ChangeDirection, subset(rangeChanges, VariableSet == "AD")$SSP, subset(rangeChanges, VariableSet == "AD")$FutureGCM)
-table(subset(rangeChanges, VariableSet == "ASD")$ChangeDirection, subset(rangeChanges, VariableSet == "ASD")$SSP, subset(rangeChanges, VariableSet == "ASD")$FutureGCM) / length(speciesDirs)
-table(subset(rangeChanges, VariableSet == "ASD")$ChangeDirection, subset(rangeChanges, VariableSet == "ASD")$SSP, subset(rangeChanges, VariableSet == "ASD")$FutureGCM)
+df_long$ChangeDirection <- ifelse(df_long$RangeChange >= 1, "+", "-")
+table(subset(df_long, Droughts == "Yes")$ChangeDirection, subset(df_long, Droughts == "Yes")$SSP, subset(df_long, Droughts == "Yes")$Dispersal) / 550
+table(subset(df_long, Droughts == "Yes")$ChangeDirection, subset(df_long, Droughts == "Yes")$SSP, subset(df_long, Droughts == "Yes")$Dispersal)
+table(subset(df_long, Droughts == "No")$ChangeDirection, subset(df_long, Droughts == "No")$SSP, subset(df_long, Droughts == "No")$Dispersal) / 80
+table(subset(df_long, Droughts == "No")$ChangeDirection, subset(df_long, Droughts == "No")$SSP, subset(df_long, Droughts == "No")$Dispersal)

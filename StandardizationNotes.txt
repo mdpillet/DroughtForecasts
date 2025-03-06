@@ -1,0 +1,7 @@
+Taxonomic notes:
+1) Caryophyllales followed
+2) Overall_score < 1 went through manual checks (misspellings, taxa missing from Caryophyllales.org)
+3) Overall_score = 1 but with a warning went through manual checks
+4) Walter et al. (2024) followed for Eriosyce curvispina complex
+5) Taxonomic_status = No opinion discarded
+6) Accepted_species changed to Echinocereus x roetteri for Name_submitted Echinocereus pectinatus var. neomexicanus

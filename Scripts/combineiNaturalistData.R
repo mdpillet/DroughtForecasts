@@ -1,5 +1,5 @@
 # Set directory structure
-relPath <- "D:/Research/Chapter3/"
+relPath <- "D:/Research/DroughtForecasts/"
 inPath <- "Data/iNaturalist/Raw/"
 outPath <- "Data/iNaturalist/Processed/observationsCombined.csv"
 

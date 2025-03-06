@@ -1,7 +1,7 @@
 library(todoBIEN)
 
 # Set directory structure
-relPath <- "F:/Chapter3/"
+relPath <- "D:/Research/DroughtForecasts/"
 outPath <- "Data/BIEN/Raw/"
 outFile <- "occurrences_10-30-2023.csv"
 
@@ -24,4 +24,4 @@ end_time <- Sys.time()
 time_diff <- end_time - start_time
 
 # Export occurrence data
-# write.csv(occurrences, paste0(relPath, outPath, outFile), row.names = F)
+write.csv(occurrences, paste0(relPath, outPath, outFile), row.names = F)

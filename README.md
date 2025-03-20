@@ -37,3 +37,6 @@ Richness-level analyses
 * stackMaps.R: creates richness maps and corresponding summary maps.
 * expertMap.R: creates richness map based on IUCN SSC CSSG Global Cactus Assessment expert maps and calculates correlations with model-based maps.
 * bioregions.R: summarizes richness changes by bioregion following Calvente et al. (2023), Appendix S11.
+
+iNaturalist data
+* iNaturalist.zip: archive including all raw iNaturalist occurrences used for this study. Secured data are not included. See https://doi.org/10.15468/dd.6jxctw.

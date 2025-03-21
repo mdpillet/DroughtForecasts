@@ -8,7 +8,7 @@ library(dotwhisker)
 library(ggrepel)
 
 # Set directory structure
-relPath <- "D:/Research/DroughtPredictions/"
+relPath <- "D:/Research/DroughtForecasts/"
 outputPath <- "Outputs/"
 figPath <- "Manuscript/Figures/"
 tablePath <- "Manuscript/Tables/"
@@ -99,17 +99,25 @@ dwplot(tidymodel, dot_args = list(color = "black"), whisker_args = list(color = 
   theme_bw() + ylab("Independent variable") + xlab("Exponentiated coefficients") +
   scale_y_discrete(labels = c("SSP5-8.5", "SSP3-7.0", "With severe drought", "No dispersal", "GCM: UKESM1-0-LL", "GCM: MPI-ESM1-2-HR")) + theme(legend.position = "none") +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + scale_x_continuous(breaks = seq(0, max(tidymodel$conf.high), by = 0.5),
-                                                                                        limits = c(0, max(tidymodel$conf.high)))
+                                                                                        limits = c(0, max(tidymodel$conf.high))) +
+  annotate("rect", xmin = 0, xmax = 1, ymin = 0.5, ymax = 6.5, alpha = 0.05, fill = "red") + 
+  annotate("rect", xmin = 1, xmax = 3, ymin = 0.5, ymax = 6.5, alpha = 0.05, fill = "green")
 dev.off()
 
 
 # Boxplots of range size changes
-df_long[df_long$droughtsIncluded, "Droughts"] <- "Yes"
-df_long[!df_long$droughtsIncluded, "Droughts"] <- "No"
+df_long[df_long$droughtsIncluded, "Droughts"] <- "With severe droughts"
+df_long[!df_long$droughtsIncluded, "Droughts"] <- "Without severe droughts"
 png(paste0(relPath, figPath, "Fig2.png"), units = "mm", width = 270, height = 180, res = 300)
-ggplot(data = df_long, aes(y = RangeChange, x = Droughts, fill = Droughts)) +
-  geom_violin(size = 1) + ylim(0, 5) + facet_grid(Dispersal ~ SSP) + geom_hline(yintercept = 1, linetype = "dashed", color = "black") + theme_bw() + 
-  ylab("Predicted change in suitable climate area") + xlab("Severe drought variables in model") + theme(legend.position = "none")
+# ggplot(data = df_long, aes(y = RangeChange, x = Droughts, fill = Droughts)) +
+#   geom_violin(size = 1) + ylim(0, 5) + facet_grid(Dispersal ~ SSP) + geom_hline(yintercept = 1, linetype = "dashed", color = "black") + theme_bw() + 
+#   ylab("Predicted change in suitable climatic area") + xlab("") + theme(legend.position = "none")
+ggplot(data = df_long, aes(x = RangeChange, col = Droughts)) +
+  geom_density(size = 1.5) + xlim(0, 4) + facet_grid(Dispersal ~ SSP) + geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() + 
+  xlab("Predicted change in suitable climatic area") + ylab("Density") + theme(legend.position = c(0.875, 0.9)) +    
+  annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1.8, alpha = 0.05, fill = "red") + 
+  annotate("rect", xmin = 1, xmax = 4, ymin = 0, ymax = 1.8, alpha = 0.05, fill = "green") +
+  theme(strip.text = element_text(size = 11), legend.title = element_blank(), axis.title = element_text(size = 12))
 dev.off()
 
 # Summary statistics

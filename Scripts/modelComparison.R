@@ -1,9 +1,10 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(ggtext)
 
 # Set directory structure
-relPath <- "D:/Research/DroughtPredictions/"
+relPath <- "D:/Research/DroughtForecasts/"
 outputPath <- "Outputs/"
 figPath <- "Manuscript/Figures/"
 tablePath <- "Manuscript/Tables/"
@@ -121,7 +122,34 @@ ggplot(df_fraction, aes(x = reorder(Variable, Fraction), y = Fraction, fill = Co
   ylab("Fraction of models") +
   theme_bw() +
   scale_fill_manual(values = c("black", "white", "grey")) + theme(legend.position = "none") +
-  scale_x_discrete(labels = custom_labels)
+  scale_x_discrete(labels = custom_labels) +
+  geom_richtext(
+    aes(x = 16, y = 0.20), 
+    label = 
+      "<b>BIO3</b>: isothermality<br>
+    <b>HAS</b>: accumulated drought severity<br>
+    <b>BIO2</b>: mean diurnal temperature range<br>
+    <b>HAD</b>: accumulated drought duration<br>
+    <b>HMD</b>: mean drought duration<br>
+    <b>HMS</b>: mean drought severity<br>
+    <b>BIO1</b>: mean annual temperature<br>
+    <b>BIO7</b>: annual temperature range<br>
+    <b>BIO9</b>: mean temperature driest quarter<br>
+    <b>BIO8</b>: mean temperature wettest quarter<br>
+    <b>BIO6</b>: minimum temperature coldest month<br>
+    <b>pH</b>: soil pH<br>
+    <b>BIO5</b>: maximum temperature warmest month<br>
+    <b>BIO14</b>: precipitation driest month<br>
+    <b>BIO11</b>: mean temperature coldest quarter<br>
+    <b>BIO10</b>: mean temperature warmest quarter<br>
+    <b>BIO15</b>: precipitation seasonality<br>
+    <b>BIO17</b>: precipitation driest quarter<br>
+    <b>BIO19</b>: precipitation coldest quarter<br>
+    <b>BIO4</b>: temperature seasonality<br>
+    <b>BIO18</b>: precipitation warmest quarter",
+    hjust = 0, vjust = 1,
+    fill = "white", label.color = "black"
+  )
 dev.off()
 
 # Compare model performance

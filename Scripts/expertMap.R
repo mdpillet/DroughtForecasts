@@ -1,7 +1,7 @@
 library(terra)
 
 # Set directory structure
-relPath <- "D:/Research/DroughtPredictions/"
+relPath <- "D:/Research/DroughtForecasts/"
 figPath <- "Manuscript/Figures/"
 expertPath <- "Data/ExpertMaps/"
 mapPath <- "Data/DiversityMaps/"
@@ -27,7 +27,8 @@ cor.test(values(richnessB), values(tmpRastB))
 countries <- vect(paste0(relPath, countryPath))
 countries <- project(countries, crs(rast(paste0(relPath, mapPath, "100km_current.tif"))))
 png(paste0(relPath, figPath, "ExtendedDataFig7.png"), units = "mm", width = 90, height = 90, res = 300)
-plot <- plot(tmpRastA, box = F, axes = F, range = c(0, 80), plg = list(title = "Species", title.cex = 0.5, cex = 0.5, size = c(0.75, 0.5)), mar = c(1.5, 1.5, 1.5, 1.5), buffer = F, cex.main = 0.75)
-sbar(1000000, "bottomleft", type = "bar", labels = c("", "1,000 km", ""), cex = 0.5)
+options(terra.pal = map.pal("viridis", 100))
+plot <- plot(tmpRastA, box = F, axes = F, range = c(0, 80), plg = list(title = "Species", title.cex = 1, cex = 1, size = c(0.75, 0.5)), mar = c(1.5, 1.5, 1.5, 1.5), buffer = F, cex.main = 0.75)
+sbar(1000000, "bottomleft", type = "bar", labels = c("", "1,000 km", ""), cex = 0.75)
 plot(countries, add = T)
 dev.off()

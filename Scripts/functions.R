@@ -317,9 +317,9 @@ extractPredSummary <- function(predsCurrent, predsFutureDir, occ, outDir) {
   summStats <- matrix(nrow = 5, ncol = nlyr(tmpRast))
   colnames(summStats) <- names(tmpRast)
   summStats[1,] <- apply(valRast, 2, min, na.rm = T)
-  summStats[3,] <- apply(valRast, 2, mean, na.rm = T)
+  summStats[2,] <- apply(valRast, 2, max, na.rm = T)
   presExtr <- terra::extract(tmpRast, occ, ID = F)
-  summStats[2,] <- apply(presExtr, 2, mean, na.rm = T)
+  summStats[3,] <- apply(presExtr, 2, mean, na.rm = T)
   predFilesFuture <- list.files(predsFutureDir, "tif$", full.names = T)
   tmpVar <- strsplit(outName, "_", fixed = T)[[1]][1]
   tmpGCM <- strsplit(outName, "_", fixed = T)[[1]][2]

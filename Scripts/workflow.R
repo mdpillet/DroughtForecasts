@@ -1,11 +1,14 @@
 library(terra)
+library(remotes)
+# Custom version of ENMeval package needs to be installed.
+# install_github("mdpillet/ENMeval", force = T)
 library(ENMeval)
 library(rmarkdown)
 library(plyr)
 library(spThin)
-library(CVmaxnet)
 library(sf)
 library(pROC)
+library(glmnet)
 
 # Set directory structure and load workflow functions
 predPath <- "D:/Research/DroughtForecasts/Data/Predictors/"

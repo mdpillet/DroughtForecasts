@@ -4,7 +4,7 @@ library(terra)
 predPath <- "D:/Research/DroughtForecasts/Data/Predictors/"
 spPath <- "D:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Thinned/"
 scriptPath <- "D:/Research/DroughtForecasts/Scripts/functions.R"
-outPath <- "D:/Research/DroughtForecasts/Outputs/"
+outPath <- "D:/Research/DroughtForecasts/OutputsSensitivityAnalysis/"
 # Predictor rasters to fit models - all must have the same projection
 predFilesCurrent <- list.files(predPath, "current.tif$", full.names = T)
 # Predictor rasters for future projection - all must have the same projection - set to NULL to disable
@@ -28,14 +28,14 @@ terraOptions(memfrac = 0.9)
 crs <- "+proj=longlat" # Projection for occurrence data
 bgNo <- 20000 # Number of background points to be sampled
 minNo <- 10 # Minimum number of occurrences for modeling
-bufferSize <- 500000 # Buffer size (m)
+bufferSize <- c(100000, 500000) # Buffer size (m)
 maxClusters <- 100 # Maximum number of clusters for spatial stratification
-minClusters <- 10 # Minimum number of clusters for spatial stratification
+minClusters <- 10 # Maximum number of clusters for spatial stratification
 finalFolds <- 5 # Final number of clusters after cluster size balancing
 spatStratBootstraps <- 100 # Number of bootstraps for clustering
 corrThreshold <- 0.7 # Threshold for removing correlated predictor variables
 tune.args <- "lqp" # Set feature complexity
-responseCurves <- T # Create response curves
+responseCurves <- F # Create response curves
 varImportance <- 5 # Calculate variable importance with this number of permutations - set to 0 to disable
 modelStats <- T # Calculate model statistics (AUC, BIC, Boyce index)
 calcThresholds <- T # Calculate common thresholds (max. TSS, equal sens. and spec., 10% omission rate) for suitability maps
@@ -43,8 +43,8 @@ statsDistances <- NULL # Vector of distances (m) used for AUC and Boyce index su
 
 # Set mapping parameters
 mapping <- T # Create suitability and binary maps - calcThresholds needs to be set to T
-aucThreshold <- 0.7 # Threshold for discarding models based on AUC - set to 0 to disable
-boyceThreshold <- 0.5 # Threshold for discarding models based on Boyce index - set to NA to disable
+aucThreshold <- 0 # Threshold for discarding models based on AUC - set to 0 to disable
+boyceThreshold <- NA # Threshold for discarding models based on Boyce index - set to NA to disable
 bgThreshold <- F # Discard models where the number of sampled background points is less than bgNo
 clampSD <- c(0, 1) # Number of standard deviations for clamping future predictions (for both variables and features) - set to 0 only to disable clamping
 cropSizes <- c(0, 100000, 500000) # Maximum dispersal sizes (m) - set to NULL to disable cropping
@@ -58,7 +58,12 @@ source(scriptPath)
 
 # List species to be modeled
 spList <- list.files(spPath, "shp$", full.names = T)
-spList <- spList[grepl("envT_extF", spList, fixed = T)]
+spList <- spList[!grepl("envT_extT", spList, fixed = T)]
+
+# Choose random species
+species <- sample(unique(sapply(strsplit(basename(spList), "_"), `[`, 1)), 100)
+write.csv(species, paste0(outPath, "speciesSample.csv"), row.names = F)
+spList <- spList[grepl(paste(species, collapse = "|"), spList)]
 
 # For debugging warnings
 options(warn = 2)
@@ -453,10 +458,10 @@ if (mapping & calcThresholds) {
         }, error = function(e) {
           message("Error encountered: ", conditionMessage(e))
           if (grepl("std::bad_alloc", conditionMessage(e), fixed = TRUE) | grepl("paging file", conditionMessage(e), fixed = TRUE) | grepl("cannot allocate vector", conditionMessage(e), fixed = TRUE)
-              | grepl("error writing to connection", conditionMessage(e), fixed = TRUE)) {            
+              | grepl("error writing to connection", conditionMessage(e), fixed = TRUE)) {
             if (numCoresTmp > 1) {
               numCoresTmp <<- max(1, floor(numCoresTmp / 2))
-              message("Memory allocation or IO failed. Retrying with ", numCoresTmp, " cores.")
+              message("Memory allocation failed. Retrying with ", numCoresTmp, " cores.")
             } else {
               stop("Failed even with 1 core — aborting.")
             }
@@ -589,10 +594,10 @@ if (mapping & calcThresholds) {
         }, error = function(e) {
           message("Error encountered: ", conditionMessage(e))
           if (grepl("std::bad_alloc", conditionMessage(e), fixed = TRUE) | grepl("paging file", conditionMessage(e), fixed = TRUE) | grepl("cannot allocate vector", conditionMessage(e), fixed = TRUE) |
-              grepl("error writing to connection", conditionMessage(e), fixed = TRUE)) {            
+              grepl("error writing to connection", conditionMessage(e), fixed = TRUE)) {
             if (numCoresTmp > 1) {
               numCoresTmp <<- max(1, floor(numCoresTmp / 2))
-              message("Memory allocation or IO failed. Retrying with ", numCoresTmp, " cores.")
+              message("Memory allocation failed. Retrying with ", numCoresTmp, " cores.")
             } else {
               stop("Failed even with 1 core — aborting.")
             }

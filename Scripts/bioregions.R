@@ -1,7 +1,7 @@
 library(terra)
 
 # Set directory structure
-relPath <- "D:/Research/DroughtPredictions/"
+relPath <- "D:/Research/DroughtForecasts/"
 summaryPath <- "Data/DiversityMaps/"
 changePath <- "Data/DiversityChangeMaps/"
 bioregionPath <- "Data/Bioregions/"
@@ -11,26 +11,10 @@ bioregions <- vect(paste0(relPath, bioregionPath, "bioregions_nonhierarchical.sh
 bioregions <- aggregate(bioregions, by = "bioregio")
 
 # Create change maps
-d0_current <- rast(paste0(relPath, summaryPath, "0km_current.tif"))
-d0_SSP126 <- rast(paste0(relPath, summaryPath, "0km_SSP126.tif"))
-d0_SSP370 <- rast(paste0(relPath, summaryPath, "0km_SSP370.tif"))
-d0_SSP585 <- rast(paste0(relPath, summaryPath, "0km_SSP585.tif"))
-d100_current <- rast(paste0(relPath, summaryPath, "100km_current.tif"))
-d100_SSP126 <- rast(paste0(relPath, summaryPath, "100km_SSP126.tif"))
-d100_SSP370 <- rast(paste0(relPath, summaryPath, "100km_SSP370.tif"))
-d100_SSP585 <- rast(paste0(relPath, summaryPath, "100km_SSP585.tif"))
-writeRaster(d0_SSP126 - d0_current, paste0(relPath, changePath, "abs_d0_SSP126.tif"))
-writeRaster(d0_SSP370 - d0_current, paste0(relPath, changePath, "abs_d0_SSP370.tif"))
-writeRaster(d0_SSP585 - d0_current, paste0(relPath, changePath, "abs_d0_SSP585.tif"))
-writeRaster(d100_SSP126 - d100_current, paste0(relPath, changePath, "abs_d100_SSP126.tif"))
-writeRaster(d100_SSP370 - d100_current, paste0(relPath, changePath, "abs_d100_SSP370.tif"))
-writeRaster(d100_SSP585 - d100_current, paste0(relPath, changePath, "abs_d100_SSP585.tif"))
-writeRaster(d0_SSP126 / d0_current, paste0(relPath, changePath, "rel_d0_SSP126.tif"))
-writeRaster(d0_SSP370 / d0_current, paste0(relPath, changePath, "rel_d0_SSP370.tif"))
-writeRaster(d0_SSP585 / d0_current, paste0(relPath, changePath, "rel_d0_SSP585.tif"))
-writeRaster(d100_SSP126 / d100_current, paste0(relPath, changePath, "rel_d100_SSP126.tif"))
-writeRaster(d100_SSP370 / d100_current, paste0(relPath, changePath, "rel_d100_SSP370.tif"))
-writeRaster(d100_SSP585 / d100_current, paste0(relPath, changePath, "rel_d100_SSP585.tif"))
+current <- rast(paste0(relPath, summaryPath, "Current/avg.tif"))
+future <- rast(paste0(relPath, summaryPath, "Future/avg.tif"))
+writeRaster(future - current, paste0(relPath, changePath, "abs_avg.tif"))
+writeRaster(future / current, paste0(relPath, changePath, "rel_avg.tif"))
 
 # List change files
 absChangeFiles <- list.files(paste0(relPath, changePath), "abs")

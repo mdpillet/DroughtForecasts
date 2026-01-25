@@ -52,8 +52,12 @@ rsconnect/
 /Data/*
 /ScriptsOld/*
 /Outputs/*
-/Scripts/getBIENOccurrences_private.R
+/OutputsOld/*
+/OutputsSensitivityAnalysis/*
+/Scripts/*private.R
+/Scripts/*old.R
+/ScriptsOld/*
 /Manuscript/*
-ToDo.txt
+/Temp/*
 .gitignore
 .gitattributes

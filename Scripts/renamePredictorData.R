@@ -1,5 +1,5 @@
 # List predictor files
-tmp <- list.files("E:/Research/DroughtForecasts/Data/Predictors/", "tif$", full.names = T)
+tmp <- list.files("D:/Research/DroughtForecasts/Data/Predictors/", "tif$", full.names = T)
 
 # Rename variables
 for (i in 1:length(tmp)) {
@@ -21,7 +21,7 @@ for (i in 1:length(tmp)) {
 file.remove(tmp)
 
 # Rename files back to original names
-tmp <- list.files("E:/Research/DroughtForecasts/Data/Predictors/", "tif$", full.names = T)
+tmp <- list.files("D:/Research/DroughtForecasts/Data/Predictors/", "tif$", full.names = T)
 for (i in 1:length(tmp)) {
   outName <- gsub("_renamed", "", tmp[i], fixed = T)
   file.rename(tmp[i], outName)

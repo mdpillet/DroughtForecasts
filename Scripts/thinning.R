@@ -2,9 +2,9 @@ library(terra)
 library(spThin)
 
 # Set directory structure and load workflow functions
-spPath <- "E:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Filtered/Over10/"
-thinPath <- "E:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Thinned/"
-summaryFile <- "E:/Research/DroughtForecasts/Data/Occurrences/BySpecies/thinningSummary.csv"
+spPath <- "D:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Filtered/Over10/"
+thinPath <- "D:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Thinned/"
+summaryFile <- "D:/Research/DroughtForecasts/Data/Occurrences/BySpecies/thinningSummary.csv"
 
 # Set seed number
 seedNo <- 2024

@@ -3,9 +3,9 @@ library(occTest)
 library(ggpubr)
 
 # Set paths
-occPath <- "E:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Over10/"
-envRaster <- "E:/Research/DroughtForecasts/Data/Predictors/ase_UKESM1-0-LL_SSP585.tif"
-outPath <- "E:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Filtered/" 
+occPath <- "D:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Over10/"
+envRaster <- "D:/Research/DroughtForecasts/Data/Predictors/ase_UKESM1-0-LL_SSP585.tif"
+outPath <- "D:/Research/DroughtForecasts/Data/Occurrences/BySpecies/Filtered/" 
 
 # Read occurrence data
 species <- list.files(occPath, "shp$", full.names = T)

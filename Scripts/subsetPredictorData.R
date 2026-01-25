@@ -1,7 +1,7 @@
 library(terra)
 
 # List all rasters
-predFiles <- list.files("E:/Research/DroughtForecasts/Data/Predictors/", "tif$", full.names = T)
+predFiles <- list.files("D:/Research/DroughtForecasts/Data/Predictors/", "tif$", full.names = T)
 
 # Subset rasters to discard severe drought variables
 for (i in 1:length(predFiles)) {

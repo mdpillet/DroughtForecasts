@@ -128,3 +128,7 @@ ggplot(df_long, aes(x = Value, y = after_stat(count))) +
   xlim(0.4, NA) +
   theme(strip.text = ggtext::element_markdown())
 dev.off()
+
+# Check correlation between number of occurrences and number of environmental outliers
+outlierSumm <- read.csv("D:/Research/DroughtForecasts/Manuscript/Submission2/Tables/SupplementaryTable5.csv")
+cor.test(outlierSumm$PostFilter_envF_extF, outlierSumm$FractionRemoved)

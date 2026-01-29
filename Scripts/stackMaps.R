@@ -166,7 +166,7 @@ countries <- project(countries, richnessCurrent)
 png(paste0(figPath, "Fig4.png"), units = "mm", width = 180, height = 180, res = 300)
 # --- COLOR PREP FOR A & B---
 my_cols <- c(
-  "white",   "#001959", "#031D5A", "#06215B", "#07245A", "#0A285B", "#0A2C5C", 
+  "#001959", "#031D5A", "#06215B", "#07245A", "#0A285B", "#0A2C5C", 
   "#0C2F5C", "#0D335D", "#0D365D", "#0E395E", "#0F3C5F", "#0F3F60", "#11415F", 
   "#114460", "#114761", "#134961", "#144C62", "#144E62", "#165061", "#165261", 
   "#185561", "#1A5761", "#1B5961", "#1E5C62", "#1F5D60", "#226060", "#246160", 
@@ -187,12 +187,12 @@ my_breaks <- c(-0.00001, 0.00001, seq(1, 100, by = 1))
 par(mfrow = c(2, 2), mar = c(1, 0, 1, 0), oma = c(1, 2, 1, 1))
 # --- PLOT A: CURRENT RICHNESS ---
 plot(richnessCurrent, 
-     box = FALSE, axes = FALSE, col = my_cols, breaks = my_breaks,
+     box = FALSE, axes = FALSE, col = c("white", rev(my_cols)), breaks = my_breaks,
      legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE) 
 plot(countries, add = TRUE)
 mtext(expression(bold("a")), side = 3, adj = 0, line = 0.5)
 fields::image.plot(
-  zlim = c(0, 100), legend.only = TRUE, col = my_cols,
+  zlim = c(0, 100), legend.only = TRUE, col = c("white", rev(my_cols)),
   smallplot = c(0.80, 0.82, 0.2, 0.8), 
   axis.args = list(at = seq(0, 100, 20), cex.axis = 0.8),
   legend.args = list(text = "Present richness\n(species)", side = 3, font = 1, line = 0.5, cex = 0.7)
@@ -200,12 +200,12 @@ fields::image.plot(
 sbar(1000000, "bottomleft", type = "bar", labels = c("", "1,000 km", ""), cex = 0.75)
 # --- PLOT B: FUTURE RICHNESS ---
 plot(richnessFuture, 
-     box = FALSE, axes = FALSE, col = my_cols, breaks = my_breaks,
+     box = FALSE, axes = FALSE, col = c("white", rev(my_cols)), breaks = my_breaks,
      legend = FALSE, mar = c(1, 0, 1, 5), reset = TRUE)
 plot(countries, add = TRUE)
 mtext(expression(bold("b")), side = 3, adj = 0, line = 0.5)
 fields::image.plot(
-  zlim = c(0, 100), legend.only = TRUE, col = my_cols,
+  zlim = c(0, 100), legend.only = TRUE, col = c("white", rev(my_cols)),
   smallplot = c(0.75, 0.77, 0.2, 0.8), 
   axis.args = list(at = seq(0, 100, 20), cex.axis = 0.8),
   legend.args = list(text = "Future richness\n(species)", side = 3, font = 1, line = 0.5, cex = 0.7)

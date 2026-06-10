@@ -39,6 +39,7 @@ Species-level analyses
 * variableSelection.R: summarizes variable selection.
 * calcRangeChanges.R: calculates range changes.
 * analyzeRangeChanges.R: analyzes range changes.
+* uncertaintyAnalysis: variance decomposition of modeling choices.
 
 Richness-level analyses
 * stackMaps.R: creates richness maps and corresponding summary maps.

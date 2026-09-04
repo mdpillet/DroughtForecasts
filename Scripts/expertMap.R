@@ -4,7 +4,7 @@ library(fields)
 
 # Set directory structure
 relPath <- "D:/Research/DroughtForecasts/"
-figPath <- "Manuscript/Submission2/Figures/"
+figPath <- "Manuscript/Revision2/Figures/"
 expertPath <- "Data/ExpertMaps/"
 mapPath <- "Data/DiversityMaps/Current/"
 countryPath <- "Data/CountriesOutline/world-administrative-boundaries.shp"
@@ -43,16 +43,17 @@ my_cols <- c(
 my_breaks <- c(-0.00001, 0.00001, seq(1, 100, by = 1))
 countries <- vect(paste0(relPath, countryPath))
 countries <- project(countries, crs(rast(paste0(relPath, mapPath, "avg.tif"))))
-png(paste0(relPath, figPath, "ExtendedDataFig7.png"), units = "mm", width = 180, height = 180, res = 300)
+tiff(paste0(relPath, figPath, "Pillet_EDfig7.tif"), units = "mm",
+     width = 180, height = 180, res = 300, compression = "lzw", type = "cairo", pointsize = 8)
 plot(tmpRast, 
      box = FALSE, axes = FALSE, col = c("white", rev(my_cols)), breaks = my_breaks,
-     legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE)
+     legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE, colNA = "white")
 plot(countries, add = TRUE)
 fields::image.plot(
   zlim = c(0, 100), legend.only = TRUE, col = c("white", rev(my_cols)),
   smallplot = c(0.85, 0.87, 0.2, 0.8), 
   axis.args = list(at = seq(0, 100, 20), cex.axis = 0.8),
-  legend.args = list(text = "Richness\n(species)", side = 3, font = 1, line = 0.5, cex = 0.7)
+  legend.args = list(text = "Richness\n(species)", side = 3, font = 1, line = 0.5, cex = 0.85)
 )
 sbar(1000000, "bottomleft", type = "bar", labels = c("", "1,000 km", ""), cex = 0.75)
 dev.off()

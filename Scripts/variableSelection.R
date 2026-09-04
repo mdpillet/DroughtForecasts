@@ -124,7 +124,8 @@ label_colors <- freqs_long %>%
 freqs_long <- subset(freqs_long, !(model == "Without severe drought" & varType == "Severe drought"))
 
 # Single-panel Cleveland dot plot, colored by model
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/Fig1.png", units = "mm", width = 180, height = 180, res = 300)
+cairo_pdf("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Fig1.pdf",
+          width = 180/25.4, height = 170/25.4)
 ggplot(freqs_long, aes(x = frequency, y = variable, color = model, shape = varType)) +
   geom_point(size = 2) +
   labs(
@@ -134,7 +135,7 @@ ggplot(freqs_long, aes(x = frequency, y = variable, color = model, shape = varTy
     shape = "Variable type"
   ) +
   geom_richtext(inherit.aes = F,
-    x = 0.4, y = levels(freqs_long$variable)[31],
+    x = 0.425, y = levels(freqs_long$variable)[33],
     label = 
       "<b>BIO3</b>: isothermality<br>
       <b>BIO2</b>: mean diurnal temperature range<br>

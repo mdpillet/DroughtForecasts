@@ -9,7 +9,7 @@ library(fields)
 relDir <- "D:/Research/DroughtForecasts/Outputs/"
 outPath <- "D:/Research/DroughtForecasts/Data/DiversityMaps/"
 countryPath <- "D:/Research/DroughtForecasts/Data/CountriesOutline/world-administrative-boundaries.shp"
-figPath <- "D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/"
+figPath <- "D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/"
 
 # Set thresholds
 aucThreshold <- 0.7 # Threshold for discarding models based on AUC
@@ -163,7 +163,7 @@ richnessRel <- richnessFuture / richnessCurrent
 countries <- vect(countryPath)
 countries <- project(countries, richnessCurrent)
 
-png(paste0(figPath, "Fig4.png"), units = "mm", width = 180, height = 180, res = 300)
+cairo_pdf(paste0(figPath, "Fig4.pdf"), width = 180/25.4, height = 180/25.4)
 # --- COLOR PREP FOR A & B---
 my_cols <- c(
   "#001959", "#031D5A", "#06215B", "#07245A", "#0A285B", "#0A2C5C", 
@@ -188,7 +188,7 @@ par(mfrow = c(2, 2), mar = c(1, 0, 1, 0), oma = c(1, 2, 1, 1))
 # --- PLOT A: CURRENT RICHNESS ---
 plot(richnessCurrent, 
      box = FALSE, axes = FALSE, col = c("white", rev(my_cols)), breaks = my_breaks,
-     legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE) 
+     legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE, colNA = "white") 
 plot(countries, add = TRUE)
 mtext(expression(bold("a")), side = 3, adj = 0, line = 0.5)
 fields::image.plot(
@@ -201,7 +201,7 @@ sbar(1000000, "bottomleft", type = "bar", labels = c("", "1,000 km", ""), cex = 
 # --- PLOT B: FUTURE RICHNESS ---
 plot(richnessFuture, 
      box = FALSE, axes = FALSE, col = c("white", rev(my_cols)), breaks = my_breaks,
-     legend = FALSE, mar = c(1, 0, 1, 5), reset = TRUE)
+     legend = FALSE, mar = c(1, 0, 1, 5), reset = TRUE, colNA = "white")
 plot(countries, add = TRUE)
 mtext(expression(bold("b")), side = 3, adj = 0, line = 0.5)
 fields::image.plot(
@@ -221,7 +221,7 @@ cols_D   <- c(scico(50, palette = "roma", begin = 0, end = 0.45),
 # --- PLOT C: ABSOLUTE CHANGE ---
 plot(richnessAbs, 
      box = FALSE, axes = FALSE, col = cols_C, breaks = breaks_C,
-     legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE)
+     legend = FALSE, mar = c(1, 1, 1, 4), reset = TRUE, colNA = "white")
 plot(countries, add = TRUE)
 mtext(expression(bold("c")), side = 3, adj = 0, line = 0.5)
 fields::image.plot(
@@ -234,7 +234,7 @@ sbar(1000000, "bottomleft", type = "bar", labels = c("", "1,000 km", ""), cex = 
 # --- PLOT D: RELATIVE CHANGE ---
 plot(richnessRel, 
      box = FALSE, axes = FALSE, col = cols_D, breaks = breaks_D,
-     legend = FALSE, mar = c(1, 0, 1, 5), reset = TRUE)
+     legend = FALSE, mar = c(1, 0, 1, 5), reset = TRUE, colNA = "white")
 plot(countries, add = TRUE)
 mtext(expression(bold("d")), side = 3, adj = 0, line = 0.5)
 fields::image.plot(

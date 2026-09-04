@@ -43,18 +43,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/Fig2.png", units = "mm", width = 270, height = 180, res = 300)
+cairo_pdf("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Fig2.pdf",
+          width = 180/25.4, height = 170/25.4)
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(size = 0.75, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
   theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 7)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -73,18 +80,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig1.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig1.tif", units = "mm", width = 180, height = 170, res = 300,
+     compression = "lzw", type = "cairo")
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(linewidth = 0.4, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
-  theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
+  theme(strip.text = element_text(size = 7), axis.title = element_text(size = 7)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 6)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -103,18 +117,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig2.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig2.tif", units = "mm", width = 180, height = 170, res = 300,
+     compression = "lzw", type = "cairo")
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(linewidth = 0.4, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
-  theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
+  theme(strip.text = element_text(size = 7), axis.title = element_text(size = 7)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 6)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -133,18 +154,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig3.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig3.tif", units = "mm", width = 180, height = 170, res = 300,
+     compression = "lzw", type = "cairo")
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(linewidth = 0.4, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
-  theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
+  theme(strip.text = element_text(size = 7), axis.title = element_text(size = 7)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 6)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -163,18 +191,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig4.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig4.tif", units = "mm", width = 180, height = 170, res = 300,
+     compression = "lzw", type = "cairo")
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(linewidth = 0.4, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
-  theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
+  theme(strip.text = element_text(size = 7), axis.title = element_text(size = 7)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 6)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -193,18 +228,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig5.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig5.tif", units = "mm", width = 180, height = 170, res = 300,
+     compression = "lzw", type = "cairo")
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(linewidth = 0.4, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
-  theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
+  theme(strip.text = element_text(size = 7), axis.title = element_text(size = 7)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 6)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -223,18 +265,25 @@ resultsPlot$cropDistance <- as.factor(resultsPlot$cropDistance)
 levels(resultsPlot$cropDistance) <- c("Dispersal: none", "Dispersal: 100 km", "Dispersal: 500 km")
 resultsPlot$time <- as.factor(resultsPlot$time)
 levels(resultsPlot$time) <- c("SSP1-2.6", "SSP3-7.0", "SSP5-8.5")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig6.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig6.tif", units = "mm", width = 180, height = 170, res = 300,
+     compression = "lzw", type = "cairo")
 ggplot(resultsPlot, aes(x = rangeChange_sameCrop, linetype = variableSet, col = GCM)) +
-  geom_density(size = 0.75, adjust = 0.4) + facet_grid(cropDistance ~ time) +
+  geom_density(linewidth = 0.4, adjust = 0.4, key_glyph = "path") + facet_grid(cropDistance ~ time) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black") + theme_bw() +
   xlab("Predicted fraction of suitable climatic area remaining in the future") + ylab("Density") +
   annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 12, alpha = 0.05, fill = "red") + 
   annotate("rect", xmin = 1, xmax = 2, ymin = 0, ymax = 12, alpha = 0.05, fill = "green") +
-  theme(strip.text = element_text(size = 11), axis.title = element_text(size = 12)) + 
+  theme(strip.text = element_text(size = 7), axis.title = element_text(size = 7)) + 
   theme(legend.position = c(0.8, 0.85),
-        legend.title = element_text(size = 9),
-        legend.text  = element_text(size = 8),
-        legend.key.size = unit(0.4, "cm")) +
+        legend.title = element_text(size = 7),
+        legend.text  = element_text(size = 6),
+        legend.key.width = unit(0.6, "cm"),
+        legend.key.height = unit(0.25, "cm"),
+        legend.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.y = unit(0.025, "cm"),
+        legend.key.spacing.x = unit(0.025, "cm"),
+        legend.margin = margin(2, 2, 2, 2),
+        axis.text = element_text(size = 6)) +
   labs(linetype = "Model type") +
   scale_linetype_manual(
     name = "Model type",
@@ -332,7 +381,8 @@ tidymodel <- tidy(tmodel, effects = "fixed", conf.int = T) %>%
   mutate(estimate = exp(estimate),
          conf.low = exp(conf.low),
          conf.high = exp(conf.high))
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/Fig3.png", units = "mm", width = 180, height = 120, res = 300)
+cairo_pdf("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Fig3.pdf",
+          width = 180/25.4, height = 120/25.4)
 dwplot(tidymodel, dot_args = list(color = "black"), whisker_args = list(color = "black")) + 
   theme_bw() + ylab("Independent variable") + xlab("Exponentiated coefficients") + xlim(0.75, 2) +
   scale_y_discrete(labels = c("GCM: UKESM1-0-LL", "GCM: MPI-ESM1-2-HR", "Thinning: 5 km", "Thinning: 10 km", "Threshold: 10th percentile omission rate", "Threshold: maximum true skill statistic", "SSP5-8.5", "SSP3-7.0", "With clamping", "Dispersal: 500 km", "Dispersal: 100 km", "With severe drought")) + 

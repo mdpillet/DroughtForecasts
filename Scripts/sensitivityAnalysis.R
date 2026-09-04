@@ -117,16 +117,19 @@ df_long <- nicheOverlaps %>%
   pivot_longer(cols = c(D, I), names_to = "Metric", values_to = "Value")
 df_long$Metric <- as.factor(df_long$Metric)
 levels(df_long$Metric) <- c("Schoener's *D*", "*I* similarity statistic")
-png("D:/Research/DroughtForecasts/Manuscript/Submission2/Figures/ExtendedDataFig8.png", units = "mm", width = 270, height = 180, res = 300)
+tiff("D:/Research/DroughtForecasts/Manuscript/Revision2/Figures/Pillet_EDfig8.tif",
+     units = "mm", width = 180, height = 120, res = 300, compression = "lzw", type = "cairo")
 ggplot(df_long, aes(x = Value, y = after_stat(count))) +
-  geom_histogram(bins = 24, fill = "grey70", color = "black") +
+  geom_histogram(bins = 24, fill = "grey70", color = "black", linewidth = 0.3) +
   facet_wrap(~ Metric, nrow = 1) +
   theme_bw() +
-  theme(strip.text = element_text(size = 11), legend.title = element_blank(), axis.title = element_text(size = 12)) +
+  theme(legend.title = element_blank(),
+        axis.title = element_text(size = 7),
+        axis.text = element_text(size = 6),
+        strip.text = ggtext::element_markdown(size = 7)) +
   xlab("Niche overlap") +
   ylab("Count") +
-  xlim(0.4, NA) +
-  theme(strip.text = ggtext::element_markdown())
+  xlim(0.4, NA)
 dev.off()
 
 # Check correlation between number of occurrences and number of environmental outliers
